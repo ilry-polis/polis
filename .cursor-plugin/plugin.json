@@ -1,6 +1,6 @@
 {
   "name": "polis",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Context engineering + spec-driven development with isolated subagents for Cursor.",
   "license": "MIT",
   "//": "Cursor has no formal plugin.json. Its real extension surface is: hooks at .cursor/hooks.json (events: beforeSubmitPrompt, beforeShellExecution, afterFileEdit, stop, ...), rules at .cursor/rules/*.mdc, and instructions in AGENTS.md. This descriptor is metadata; scripts/install.sh emits the actual files. The CURSOR_PLUGIN_ROOT env var points at the installed copy so hook scripts can resolve their own path.",

@@ -176,10 +176,16 @@ function main() {
   // Source (a): payload carries context_window (preferred, freshest).
   // Source (b): the bridge file statusline.js wrote (raw_used_pct).
   let rawUsed = null;
-  const remaining = Number(payload?.context_window?.remaining_percentage);
-  if (Number.isFinite(remaining)) {
-    rawUsed = Math.max(0, Math.min(100, Math.round(100 - remaining)));
-  } else {
+  const cw = payload?.context_window;
+  if (cw) {
+    let u = Number(cw.used_percentage);
+    if (!Number.isFinite(u)) {
+      const remaining = Number(cw.remaining_percentage);
+      if (Number.isFinite(remaining)) u = 100 - remaining;
+    }
+    if (Number.isFinite(u)) rawUsed = Math.max(0, Math.min(100, Math.round(u)));
+  }
+  if (rawUsed == null) {
     const bridge = readBridge(bridgePath(sessionId));
     if (bridge && Number.isFinite(Number(bridge.raw_used_pct))) {
       rawUsed = Number(bridge.raw_used_pct);

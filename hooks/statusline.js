@@ -113,11 +113,22 @@ function renderBar(percent, color) {
  * Exported shape kept simple for testing.
  */
 export function computeUsage(data, env = process.env) {
-  const remaining = Number(data?.context_window?.remaining_percentage);
-  const totalCtx = Number(data?.context_window?.total_tokens) || DEFAULT_TOTAL_TOKENS;
+  const cw = data?.context_window;
+  if (!cw) return null;
 
-  // If the runtime didn't give us a remaining %, we can't read real context.
-  if (!Number.isFinite(remaining)) return null;
+  // Claude Code provides both used_percentage and remaining_percentage.
+  // Prefer the native used_percentage; fall back to 100 - remaining.
+  let rawUsedReal = Number(cw.used_percentage);
+  if (!Number.isFinite(rawUsedReal)) {
+    const remaining = Number(cw.remaining_percentage);
+    if (!Number.isFinite(remaining)) return null; // no real context this turn
+    rawUsedReal = 100 - remaining;
+  }
+  const remaining = 100 - rawUsedReal;
+
+  // Window size: the field is context_window_size (fallback total_tokens, then default).
+  const totalCtx =
+    Number(cw.context_window_size) || Number(cw.total_tokens) || DEFAULT_TOTAL_TOKENS;
 
   const acw = parseInt(env.CLAUDE_CODE_AUTO_COMPACT_WINDOW || "0", 10);
   const bufferPct =
@@ -128,7 +139,7 @@ export function computeUsage(data, env = process.env) {
     ((remaining - bufferPct) / (100 - bufferPct)) * 100
   );
   const normalizedUsed = Math.max(0, Math.min(100, Math.round(100 - usableRemaining)));
-  const rawUsed = Math.max(0, Math.min(100, Math.round(100 - remaining)));
+  const rawUsed = Math.max(0, Math.min(100, Math.round(rawUsedReal)));
 
   return { normalizedUsed, rawUsed };
 }

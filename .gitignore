@@ -1,0 +1,16 @@
+# Polis local state (per-project, not part of the plugin source)
+.claude/
+.polis/
+
+# Install artifacts emitted by scripts/install.sh
+.codex/config.toml
+.cursor/
+
+# OS / editor noise
+.DS_Store
+*.swp
+Thumbs.db
+
+# Node (only if you ever add tooling; Polis itself has zero deps)
+node_modules/
+npm-debug.log*

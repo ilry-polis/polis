@@ -1,0 +1,30 @@
+{
+  "name": "polis",
+  "version": "0.1.0",
+  "description": "Multi-runtime plugin for coding agents: context engineering + spec-driven development with isolated subagents. Runs natively on Claude Code, Codex CLI and Cursor.",
+  "license": "MIT",
+  "keywords": [
+    "claude-code",
+    "codex",
+    "cursor",
+    "coding-agent",
+    "context-engineering",
+    "spec-driven-development",
+    "tdd",
+    "subagents"
+  ],
+  "author": "",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "install:claude": "bash scripts/install.sh --runtime claude --scope project",
+    "install:codex": "bash scripts/install.sh --runtime codex --scope project",
+    "install:cursor": "bash scripts/install.sh --runtime cursor --scope project",
+    "install:all": "bash scripts/install.sh --runtime all --scope project",
+    "uninstall": "bash scripts/install.sh --uninstall"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

@@ -1,0 +1,16 @@
+{
+  "name": "polis",
+  "version": "0.1.0",
+  "description": "Context engineering + spec-driven development with isolated subagents. The orchestrator stays lean; heavy work runs in fresh-context subagents under a discuss -> spec -> plan -> exec -> verify workflow.",
+  "license": "MIT",
+  "keywords": [
+    "context-engineering",
+    "spec-driven-development",
+    "tdd",
+    "subagents",
+    "workflow"
+  ],
+  "commands": "./commands",
+  "skills": "./skills",
+  "hooks": "./hooks/hooks.json"
+}

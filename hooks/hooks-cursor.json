@@ -1,0 +1,21 @@
+{
+  "//": "Polis hook mapping for Cursor (schema version 1). Cursor's lifecycle events differ from Claude Code: there is no PostToolUse and no SessionStart. The closest equivalents Polis uses are: beforeSubmitPrompt (bootstrap + inject context on each prompt), afterFileEdit (track changes for the context estimate), and stop (flush the estimate / offer pause). $CURSOR_PLUGIN_ROOT is exported by install.sh so the scripts can resolve their own location. Cursor runs command hooks that read JSON on stdin and may return JSON on stdout.",
+  "version": 1,
+  "hooks": {
+    "beforeSubmitPrompt": [
+      {
+        "command": "bash \"$CURSOR_PLUGIN_ROOT/hooks/session-start.sh\""
+      }
+    ],
+    "afterFileEdit": [
+      {
+        "command": "node \"$CURSOR_PLUGIN_ROOT/hooks/context-monitor.js\""
+      }
+    ],
+    "stop": [
+      {
+        "command": "node \"$CURSOR_PLUGIN_ROOT/hooks/context-monitor.js\""
+      }
+    ]
+  }
+}

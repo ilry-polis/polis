@@ -1,0 +1,24 @@
+# ============================================================================
+# Polis :: Codex hook fragment
+# ----------------------------------------------------------------------------
+# install.sh appends this into the active Codex config.toml (user or project).
+# Codex runs COMMAND hooks only -- prompt/agent handlers are parsed but skipped
+# -- so the Polis context monitor runs as a command hook. {POLIS_ROOT} is
+# replaced by install.sh with the absolute install path.
+#
+# Event names below follow Codex's lifecycle. The monitor reacts to tool
+# activity to maintain the context estimate; session start injects guidance via
+# AGENTS.md + the context-mgmt skill (the portable nudge path).
+# ============================================================================
+
+[[hooks]]
+event = "PostToolUse"
+[[hooks.handlers]]
+type = "command"
+command = "node {POLIS_ROOT}/hooks/context-monitor.js"
+
+[[hooks]]
+event = "SessionStart"
+[[hooks.handlers]]
+type = "command"
+command = "bash {POLIS_ROOT}/hooks/session-start.sh"

@@ -1,0 +1,19 @@
+{
+  "name": "polis-marketplace",
+  "owner": {
+    "name": "Ilry Polis"
+  },
+  "metadata": {
+    "description": "Marketplace listing for the Polis plugin.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "polis",
+      "source": "./",
+      "description": "Context engineering + spec-driven development with isolated subagents.",
+      "version": "0.1.0",
+      "license": "MIT"
+    }
+  ]
+}

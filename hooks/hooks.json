@@ -1,0 +1,26 @@
+{
+  "//": "Polis hook wiring for Claude Code. ${CLAUDE_PLUGIN_ROOT} is set by Claude Code to the installed plugin directory. The statusline is configured separately in settings.json (statusLine.command), not here, because the statusline is a distinct mechanism from lifecycle hooks.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/context-monitor.js\""
+          }
+        ]
+      }
+    ]
+  }
+}

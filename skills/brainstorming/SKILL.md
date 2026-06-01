@@ -49,6 +49,26 @@ capture: the goal, the chosen approach (and what was rejected and why), the
 gray areas now resolved, explicit non-goals, and any open questions deferred to
 the spec phase. This document is the input to `/polis:spec`.
 
+## For a new project: also produce ID'd requirements
+
+When the discussion is for a whole **new project** (not a single feature), the
+design alone isn't enough — the next step, `/polis:roadmap`, needs requirements it
+can validate coverage against. So also produce a `REQUIREMENTS.md` where every
+requirement carries a categorized, numbered ID:
+
+- Group by capability area and give each area a short prefix: `AUTH`, `INFRA`,
+  `BILL`, `CRISIS`, `UX`, and so on.
+- Number within the area: `AUTH-01`, `AUTH-02`, `INFRA-01`...
+- One requirement per ID, stated as a single checkable capability or constraint.
+
+These IDs are not decoration — the roadmap's coverage validator checks that every
+one maps to exactly one phase. Without IDs, roadmapping can't guarantee nothing is
+dropped. So for a new project, converging means two artifacts: the design, and the
+ID'd requirements.
+
+For a single feature on an existing project, skip this — a feature goes straight
+discuss → spec → plan, no roadmap, no formal requirement IDs needed.
+
 ## Skipping
 
 If the user wants to skip discussion, honor it, but write a one-line note at the

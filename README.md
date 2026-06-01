@@ -64,15 +64,15 @@ Each phase needs your approval to advance. Polis proposes; you decide.
 Meanwhile, the context monitor watches the window:
 
 ```
-WARNING (~41%)  → start delegating, prefer short tasks
-HIGH    (~61%+) → finish & commit current task only
-CRITICAL(~75%+) → pause-work → compact → resume-work
+WARNING (40%+)  → start delegating, prefer short tasks
+HIGH    (65%+)  → finish & commit current task only
+CRITICAL(80%+)  → pause-work → compact → resume-work (skull)
 ```
 
-> **Honest note on the monitor:** none of the supported runtimes expose the real
-> context percentage to a plugin, so Polis *estimates* usage from observed tool
-> I/O. The estimate is deliberately conservative — it warns early. Trust the
-> direction more than the exact number.
+> **How the monitor reads context:** Claude Code exposes the live context state
+> to the statusline, so Polis reads the **real** usage — no estimation. It judges
+> thresholds on the figure that matches `/context`, and the bar leans a little
+> early (a normalized value) as an action nudge. CRITICAL means CRITICAL.
 
 ---
 
@@ -146,6 +146,7 @@ Once installed, set Polis up in your project:
 |---|---|
 | `/polis:init` | Set up Polis in the project; detect the stack |
 | `/polis:discuss` | Socratic brainstorming before any code |
+| `/polis:roadmap` | Cut a new project into phases (new/large projects) |
 | `/polis:spec` | Write the executable technical spec |
 | `/polis:plan` | Break the spec into atomic, testable tasks |
 | `/polis:exec` | Execute the plan via isolated subagents |
@@ -201,9 +202,9 @@ polis/
 ├── .claude-plugin/        # Claude Code manifest + marketplace catalog
 ├── .codex-plugin/         # Codex plugin manifest
 ├── .cursor-plugin/        # Cursor descriptor (metadata for the installer)
-├── skills/                # The methodology — 11 skills, fire by context
+├── skills/                # The methodology — 14 skills, fire by context
 ├── hooks/                 # statusline + context monitor + bootstrap + wiring
-├── commands/              # 13 slash commands (thin entry points to skills)
+├── commands/              # 14 slash commands (thin entry points to skills)
 ├── references/            # Context budget, anti-patterns, subagent guidelines
 ├── scripts/               # install.sh, convert-runtime.sh, TOML fragments
 ├── CLAUDE.md / AGENTS.md   # Per-runtime bootstrap instructions

@@ -16,6 +16,9 @@ Drive every build through these phases, each gated by the user's approval:
 
 - **Don't jump to code.** Agree the design first, then spec, then plan, then
   execute. Code is the last step.
+- **New project?** After discuss, run roadmap to cut the app into phases
+  (vertical-slice capabilities; granularity coarse/standard/fine), then run
+  spec → plan → exec → verify per phase, one at a time.
 - **Each phase needs approval.** Propose; let the user decide before advancing.
 
 ## Invocation per runtime
@@ -33,10 +36,11 @@ Drive every build through these phases, each gated by the user's approval:
 - Keep the main session **under 40%** of the usable window.
 - Push heavy work into **subagents** with fresh context; pull back only the
   outcome, not the transcript.
-- At **WARNING (~41%)** start delegating and prefer short tasks; at **HIGH
-  (~61%+)** finish and commit the current task only; at **CRITICAL (~75%+)**
+- At **WARNING (40%+)** start delegating and prefer short tasks; at **HIGH
+  (65%+)** finish and commit the current task only; at **CRITICAL (80%+)**
   pause, compact/restart, resume.
-- The percentage is a conservative estimate, not a measured value.
+- On Claude Code the percentage is the real context usage (matches `/context`).
+  On runtimes that don't expose it, the monitor stays silent rather than guessing.
 
 > Codex/Cursor hook note: both runtimes run **command hooks** only. Codex parses
 > but skips prompt/agent hook handlers. So the context monitor runs as a command
@@ -50,6 +54,10 @@ Drive every build through these phases, each gated by the user's approval:
 - **Atomic commits.** One task, one commit, `[polis] T<n>: <what>`.
 - **Two-phase review** after each task: compliance, then quality. Fix before
   advancing.
+- **When something breaks**, debug systematically — root-cause before any fix, one
+  hypothesis at a time, fix the source. 3+ failed fixes ⇒ stop, question the design.
+- **Never claim done without evidence** — run it, read the output. A subagent's
+  self-report is a claim, not proof.
 
 ## State
 

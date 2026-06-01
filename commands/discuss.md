@@ -27,3 +27,8 @@ brainstorming skill (skills/brainstorming) — it does not write code.
 - One question at a time; this is a conversation, not a form.
 - The output of this command is an approved design, which becomes the input to
   `/polis:spec`.
+- **New project?** Also produce a `REQUIREMENTS.md` with categorized, numbered IDs
+  (AUTH-01, INFRA-01, ...) — these feed `/polis:roadmap`, which comes next and
+  needs them to validate coverage. A new project goes discuss → roadmap → (per
+  phase) spec → plan → exec → verify. A single feature skips roadmap: discuss →
+  spec → plan.

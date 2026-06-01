@@ -30,6 +30,10 @@ end to end:
 If any check fails, it's not finished — route the fix back through execution,
 then re-verify.
 
+Every check here is run-and-read, not assumed (skills/verification-before-completion):
+the suite is green because you ran it and saw it, the criteria are met because you
+demonstrated each — not because the tasks "should" add up.
+
 ## Prepare the handoff (merge / PR)
 
 Once verified, prepare the work to leave the workflow:

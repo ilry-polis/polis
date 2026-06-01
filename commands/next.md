@@ -14,15 +14,19 @@ system's recommendation.
 Read the state and route by priority (first match wins):
 
 1. **Pending pause** — STATE.md has a `Stopped At` breadcrumb → `/polis:resume-work`.
-2. **Context HIGH/CRITICAL** — the monitor estimate is past 60% →
+2. **Context HIGH/CRITICAL** — the monitor reads past 65% →
    finish + commit the current task, then `/polis:pause-work`.
 3. **By phase:**
    - no design yet for the active feature → `/polis:discuss`
-   - design approved, no spec → `/polis:spec`
+   - new project: design + ID'd requirements approved, no roadmap yet →
+     `/polis:roadmap`
+   - roadmap exists, current phase not specced → `/polis:spec <phase>`
+   - design approved (single feature), no spec → `/polis:spec`
    - spec approved, no plan → `/polis:plan`
    - plan approved, tasks remaining → `/polis:exec` (name the next task)
-   - all tasks done, not verified → `/polis:verify`
-   - verified → propose the next milestone
+   - all tasks done, phase not verified → `/polis:verify`
+   - phase verified, more phases in roadmap → `/polis:spec` the next phase
+   - verified, no more phases → propose the next milestone
 4. **Uninitialized** — no `.claude/polis/` → `/polis:init`.
 
 ## Output

@@ -3,44 +3,53 @@
 This reference defines how Polis accounts for context, why the numbers are what
 they are, and the honest limits of what Polis can actually measure.
 
-## What Polis can and cannot measure
+## What Polis measures
 
-**Cannot:** None of the three supported runtimes hands a script the real
-"tokens used / tokens total" figure for the live session. Claude Code's
-statusline and hooks receive session metadata, but not a precise usage number.
+**Claude Code exposes the real context state.** The statusline payload includes
+`context_window.remaining_percentage` and `total_tokens`. Polis reads that
+directly — no tokenization, no transcript scanning, no I/O accumulation. The
+number is ground truth from the runtime, not a guess.
 
-**Can:** Polis observes the *size of tool inputs and outputs* as they flow
-through the PostToolUse hook (Claude Code) or afterFileEdit/stop hooks (Cursor),
-accumulates those bytes per session in a temp-dir bridge file, and converts to
-an approximate token count.
+(On runtimes that don't expose this — e.g. some Cursor/Codex hook contexts — the
+monitor simply has nothing to judge that turn and stays silent rather than
+estimating. Polis prefers no signal to a fabricated one.)
 
-So every Polis percentage is an **estimate**, and a conservative one. It
-undercounts, because it never sees:
+## Raw vs normalized — the two numbers
 
-- the system prompt and tool definitions,
-- prior conversation turns that predate the current tool stream,
-- the model's own reasoning tokens.
+Polis derives two percentages from the real `remaining_percentage`:
 
-The practical consequence: when Polis shows a percentage, the true figure is
-higher. That is by design — the conservative estimate plus the bands sitting at
-the ceiling means a WARNING is a real signal, not a false alarm.
+- **Raw used%** = `100 − remaining`. This matches what Claude Code's native
+  `/context` command shows. The **monitor** judges its thresholds on this, so
+  Polis's CRITICAL fires in step with what you see in `/context`.
+- **Normalized used%** = the raw value rescaled against the *usable* window
+  (everything before the auto-compact buffer kicks in). The **statusline bar**
+  shows this. It runs ~13 points ahead of raw on purpose: the bar is an action
+  prompt ("delegate / pause soon"), so it leans early.
+
+Why the split: a normalized-only meter over-warns relative to `/context` (a known
+discrepancy), which erodes trust in the signal. Showing the action-oriented
+number on the bar while judging thresholds on the native-matching number gives
+both an early nudge and an honest CRITICAL.
 
 ## The numbers
 
 | Quantity | Value | Why |
 |---|---|---|
-| Auto-compact reserve | 16.5% | Claude Code holds back ~1/6 of the window for compaction; that space is not yours to spend. |
-| Usable window | 83.5% | What remains after the reserve. All Polis percentages are of this. |
-| Assumed window | 200,000 tokens | Default when the runtime doesn't report the model's window. Override in config.json. |
-| Bytes per token | ~4 | Crude heuristic for the byte→token conversion. Override in config.json. |
-| Orchestrator target | < 40% | At the edge of the accuracy-degradation zone; the first WARNING marks crossing it. |
+| Auto-compact buffer | 16.5% (default) | Claude Code reserves part of the window for compaction. Overridden by the `CLAUDE_CODE_AUTO_COMPACT_WINDOW` env var (in tokens) when present. |
+| Fallback window | 1,000,000 tokens | Used only if the runtime omits `total_tokens`. |
+| Orchestrator target | < 40% | The accuracy-degradation zone begins around here; the first WARNING marks crossing it. |
 
 ## Thresholds
 
 - **OK 0–40%** — healthy orchestrator; work normally.
-- **WARNING 41–60%** — past the ceiling; start delegating, prefer short tasks.
-- **HIGH 61–75%** — accuracy compromised; finish + commit current task only.
-- **CRITICAL 75%+** — save state and pause; the monitor writes a breadcrumb.
+- **WARNING 40–64%** — start delegating, prefer short tasks.
+- **HIGH 65–79%** — accuracy compromised; finish + commit current task only.
+- **CRITICAL 80%+** — save state and pause; the monitor writes a breadcrumb, and
+  the bar shows a blinking skull.
+
+(These bands are judged on the **raw** used% — the figure that matches `/context`.
+The statusline bar's color may step up slightly earlier because it renders the
+normalized value; see "Raw vs normalized" above.)
 
 ## Budgeting strategy
 
@@ -58,15 +67,17 @@ the ceiling means a WARNING is a real signal, not a false alarm.
 
 ## config.json overrides
 
+The context reading is real, so there's little to tune. The auto-compact buffer
+is normally read from the `CLAUDE_CODE_AUTO_COMPACT_WINDOW` env var; the
+orchestrator target is advisory:
+
 ```json
 {
   "context": {
-    "windowTokens": 200000,
-    "autoCompactReserve": 0.165,
-    "bytesPerToken": 4,
     "orchestratorTargetPct": 40
   }
 }
 ```
 
-If a key is absent, the built-in default applies.
+The buffer default (16.5%) applies only when the env var is absent. The env var
+is the runtime's own source of truth and is preferred.

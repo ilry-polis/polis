@@ -13,20 +13,25 @@ steps, and keep the context window lean the whole way. This skill is the map.
 
 Drive every build through **discuss → spec → plan → exec → verify**, keeping the
 orchestrator under 40% by pushing heavy work into fresh-context subagents, with
-TDD and atomic commits throughout, and the user approving each phase.
+TDD and atomic commits throughout, and the user approving each phase. For a whole
+new project, **roadmap** sits between discuss and spec: it cuts the app into
+phases, and you then run spec → plan → exec → verify on each phase, one at a time.
 
 ## The phases, and what runs each
 
 | Phase | Command | Skill | Produces |
 |---|---|---|---|
-| Discuss | `/polis:discuss` | brainstorming | `specs/design-<f>.md` |
-| Spec | `/polis:spec` | writing-specs | `specs/spec-<f>-v<n>.md` |
-| Plan | `/polis:plan` | writing-plans | `plans/plan-<f>-v<n>.md` |
+| Discuss | `/polis:discuss` | brainstorming | `design-<f>.md` (+ REQUIREMENTS.md for new projects) |
+| Roadmap | `/polis:roadmap` | roadmapping | `ROADMAP.md` (phases) — new/large projects only |
+| Spec | `/polis:spec` | writing-specs | `spec-<f>-v<n>.md` |
+| Plan | `/polis:plan` | writing-plans | `plan-<f>-v<n>.md` |
 | Exec | `/polis:exec` | executing-plans + subagent-dispatch + tdd | atomic commits |
 | Verify | `/polis:verify` | finishing-work + code-review | merge-ready feature |
 
 Cross-cutting, always on: **context-mgmt** (watches the window), **project-detect**
-(knows the stack), **code-review** (the review step inside exec and verify).
+(knows the stack), **code-review** (the review step inside exec and verify),
+**debugging** (when work breaks — root-cause before fix), and
+**verification-before-completion** (evidence before any "done" claim).
 
 ## When each piece fires
 
@@ -46,9 +51,10 @@ for when the user wants to drive a specific phase.
 
 ## Support commands
 
-`/polis:init` (set up), `/polis:status` (where am I), `/polis:next` (what next),
-`/polis:health` (is Polis intact), `/polis:config` (toggles),
-`/polis:pause-work` & `/polis:resume-work` (stop and restart without loss).
+`/polis:init` (set up), `/polis:roadmap` (phase a new project), `/polis:status`
+(where am I), `/polis:next` (what next), `/polis:health` (is Polis intact),
+`/polis:config` (toggles), `/polis:pause-work` & `/polis:resume-work` (stop and
+restart without loss).
 
 ## The state that ties it together
 

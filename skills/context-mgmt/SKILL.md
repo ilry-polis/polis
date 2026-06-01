@@ -32,23 +32,25 @@ the thresholds should track real headroom.
 
 ## Reading the monitor
 
-Polis estimates context usage from observed tool I/O (see
-references/context-budget.md for why it's an estimate, not ground truth) and
-reports a threshold:
+Polis reads the **real** context usage from the runtime (Claude Code exposes it
+directly — see references/context-budget.md), so the numbers are ground truth,
+not a guess. It reports a threshold:
 
 - **OK (0–40%)** — healthy orchestrator. Work normally.
-- **WARNING (41–60%)** — past the ceiling. Start delegating heavy work to
-  subagents and prefer short tasks. Avoid starting anything that will read a lot
-  or generate a lot in the orchestrator.
-- **HIGH (61–75%)** — accuracy is compromised. Finish the *current* task only,
+- **WARNING (40–64%)** — start delegating heavy work to subagents and prefer
+  short tasks. Avoid starting anything that will read a lot or generate a lot in
+  the orchestrator.
+- **HIGH (65–79%)** — accuracy is compromised. Finish the *current* task only,
   commit it, and prepare to pause. Do not start new tasks in the orchestrator.
-- **CRITICAL (75%+)** — stop. The monitor has saved a crash breadcrumb. Run
-  `/polis:pause-work`, then `/compact` (or a fresh session), then
-  `/polis:resume-work`.
+- **CRITICAL (80%+)** — stop. The monitor has saved a crash breadcrumb (and the
+  bar shows a blinking skull). Run `/polis:pause-work`, then `/compact` (or a
+  fresh session), then `/polis:resume-work`.
 
-The estimate is deliberately conservative — it undercounts tokens it never
-observes, so it errs toward warning early. Trust the direction of the signal
-more than its exact number.
+The thresholds are judged on the **raw** used% — the same figure `/context`
+shows — so CRITICAL fires when you'd actually expect it. The statusline bar may
+color up slightly earlier because it renders the *normalized* value, which is an
+intentional early nudge toward action. Trust the CRITICAL; treat the bar's color
+as a lean-early prompt.
 
 ## The reflexes this skill installs
 
@@ -65,10 +67,10 @@ more than its exact number.
    context produces better work than grinding through a degraded window. The
    STATE.md handoff is designed so resume loses nothing important.
 
-## When the runtime can't measure context
+## When the runtime can't report context
 
-On runtimes that don't expose usage to hooks (all three supported runtimes, to
-varying degrees), the estimate is your only gauge. Supplement it with judgment:
-if you've read several large files, run a big test suite, or had a long
-back-and-forth, assume you're higher than the bar reads and lean toward
-delegating or pausing.
+Claude Code reports usage directly. On a runtime or hook context that doesn't
+(some Cursor/Codex paths), the monitor stays silent rather than fabricating a
+number — so fall back to judgment: if you've read several large files, run a big
+test suite, or had a long back-and-forth, assume you're higher than it looks and
+lean toward delegating or pausing.

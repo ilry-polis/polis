@@ -44,7 +44,7 @@ For each task in the approved plan, in dependency order:
 
 - Target: orchestrator **under 40%** throughout. The whole reason work goes to
   subagents is to keep it there.
-- If the monitor reports **WARNING (41%+)** mid-execution: finish the *current*
+- If the monitor reports **WARNING (40%+)** mid-execution: finish the *current*
   task, commit it, and auto-pause (`/polis:pause-work`). Do not start the next
   task in a degraded orchestrator. Resume with fresh context.
 - At **HIGH/CRITICAL**, the same reflex applies, more urgently — see
@@ -64,6 +64,11 @@ Halt and consult the user if:
   around the spec, flag the mismatch;
 - review keeps failing on the same task after a couple of fix attempts;
 - the work reveals a design assumption that no longer holds.
+
+When a task breaks in a way that isn't a quick correct fix — a test won't go
+green, behavior surprises you — switch into systematic debugging
+(skills/debugging) rather than guessing at patches. And never mark a task done on
+a subagent's say-so: verify the green independently (skills/verification-before-completion).
 
 Execution is mechanical *because* the thinking was front-loaded into discuss,
 spec, and plan. When execution stops being mechanical, that's a signal an

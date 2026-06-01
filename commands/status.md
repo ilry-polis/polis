@@ -1,5 +1,5 @@
 ---
-description: Show the current Polis state at a glance — workflow phase, task progress, last commit, and the estimated context budget.
+description: Show the current Polis state at a glance — workflow phase, task progress, last commit, and the context budget.
 argument-hint: ""
 ---
 
@@ -21,10 +21,10 @@ nothing.
    is in progress.
 
 3. **Context budget.** Read the most recent `polis-ctx-*.json` bridge file from
-   the OS temp dir and report the estimated percentage and threshold. Remind the
-   user, in a few words, that this is a conservative estimate, not a measured
-   value. If no bridge exists yet, say the monitor hasn't recorded anything this
-   session.
+   the OS temp dir and report the percentage and threshold. Note to the
+   user, in a few words, that this matches the native /context readout (real
+   usage, not a guess). If no bridge exists yet, say the monitor hasn't recorded
+   anything this session.
 
 4. **Next action.** End with the single most sensible next step given the state
    (e.g. "resume-work pending", "continue exec at task 4", "context HIGH —

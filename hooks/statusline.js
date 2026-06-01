@@ -4,33 +4,35 @@
  * ----------------------------------------------------------------------------
  * Renders the Polis context bar on the Claude Code statusline.
  *
- * HONEST LIMITATION (read this):
- *   Claude Code does NOT expose the real context-window percentage to scripts.
- *   The statusline script receives a JSON payload on stdin describing the
- *   session, but not a precise "tokens used / tokens total" figure. So Polis
- *   ESTIMATES usage by accumulating the byte-size of tool inputs+outputs that
- *   the PostToolUse hook (context-monitor.js) records in a shared bridge file.
- *   This is a heuristic, not ground truth. It is deliberately conservative:
- *   we'd rather warn early than warn late.
+ * CONTEXT SOURCE (real, not estimated):
+ *   Claude Code passes a JSON payload on stdin that includes the live context
+ *   window state: context_window.remaining_percentage and .total_tokens. Polis
+ *   reads that directly -- no tokenization, no transcript scanning, no I/O
+ *   accumulation. The number is ground truth from the runtime.
  *
- * DATA FLOW:
- *   context-monitor.js  --(writes)-->  bridge.json  --(reads)-->  statusline.js
+ * NORMALIZATION (auto-compact buffer):
+ *   Claude Code reserves part of the window for auto-compact. Polis scales the
+ *   meter to the USABLE range so 100% means "compact is about to fire," not
+ *   "physical window full." The buffer is read from the env var
+ *   CLAUDE_CODE_AUTO_COMPACT_WINDOW (tokens) when present, else defaults to
+ *   16.5%.
  *
- * The bridge file lives in os.tmpdir() so it works cross-platform and never
- * pollutes the repo. It is keyed by session id.
+ * NORMALIZED vs RAW (important):
+ *   The displayed bar uses the NORMALIZED used% (against the usable range).
+ *   But the bridge file written for context-monitor.js stores the RAW used%
+ *   (100 - remaining), because the normalized value over-warns by ~13 points
+ *   relative to Claude Code's own /context readout. Bar = normalized (action
+ *   threshold); monitor = raw (matches native /context).
  *
  * OUTPUT: a single line printed to stdout (Claude Code renders it verbatim).
  *
- * THRESHOLDS (percent of USABLE context, see below):
- *   green   0-40%   OK        normal work, healthy orchestrator
- *   yellow  41-60%  WARNING   past the ceiling, start delegating / short tasks
- *   orange  61-75%  HIGH      accuracy compromised, finish current task only
- *   red     75%+    CRITICAL  save state now, pause required
+ * THRESHOLDS (on normalized used%):
+ *   green        < 40%   OK        normal work, healthy orchestrator
+ *   yellow      40-64%   WARNING   start delegating / short tasks
+ *   orange      65-79%   HIGH      accuracy compromised, finish current task
+ *   blink red    >= 80%  CRITICAL  save state now, pause required (skull)
  *
- * USABLE CONTEXT:
- *   Claude Code reserves ~16.5% of the window for auto-compact. Polis treats
- *   the remaining 83.5% as the "usable" budget and reports the percentage of
- *   THAT, so the thresholds reflect real working headroom rather than raw size.
+ * SAFETY: 3s stdin timeout; all errors silently no-op so the prompt never breaks.
  */
 
 import fs from "node:fs";
@@ -38,17 +40,16 @@ import os from "node:os";
 import path from "node:path";
 
 // ----------------------------------------------------------------------------
-// Tunables. Kept here (not hardcoded elsewhere) so config.json can override.
+// Tunables.
 // ----------------------------------------------------------------------------
-const AUTO_COMPACT_RESERVE = 0.165; // ~16.5% reserved by Claude Code
-const DEFAULT_WINDOW_TOKENS = 200_000; // assumed model window if unknown
-const APPROX_BYTES_PER_TOKEN = 4; // crude tokens<->bytes heuristic
+const DEFAULT_AUTO_COMPACT_PCT = 16.5; // fallback buffer if env var absent
+const DEFAULT_TOTAL_TOKENS = 1_000_000; // fallback window if runtime omits it
 
 const THRESHOLDS = [
   { name: "OK", min: 0, color: "\x1b[32m", glyph: "🟢" }, // green
-  { name: "WARNING", min: 41, color: "\x1b[33m", glyph: "🟡" }, // yellow
-  { name: "HIGH", min: 61, color: "\x1b[38;5;208m", glyph: "🟠" }, // orange
-  { name: "CRITICAL", min: 75, color: "\x1b[31m", glyph: "🔴" }, // red
+  { name: "WARNING", min: 40, color: "\x1b[33m", glyph: "🟡" }, // yellow
+  { name: "HIGH", min: 65, color: "\x1b[38;5;208m", glyph: "🟠" }, // orange
+  { name: "CRITICAL", min: 80, color: "\x1b[5;31m", glyph: "💀" }, // blinking red
 ];
 const RESET = "\x1b[0m";
 
@@ -56,7 +57,7 @@ const RESET = "\x1b[0m";
 // Helpers
 // ----------------------------------------------------------------------------
 
-/** Read all of stdin synchronously; return "" if nothing is piped. */
+/** Read stdin synchronously; "" if nothing piped. */
 function readStdin() {
   try {
     return fs.readFileSync(0, "utf8");
@@ -65,76 +66,117 @@ function readStdin() {
   }
 }
 
-/** Bridge file path for a given session id, inside the OS temp dir. */
+/** Bridge file path for a session id, inside the OS temp dir. */
 function bridgePath(sessionId) {
   const safe = String(sessionId || "default").replace(/[^a-zA-Z0-9_-]/g, "_");
   return path.join(os.tmpdir(), `polis-ctx-${safe}.json`);
 }
 
-/** Read the bridge file written by context-monitor.js. Never throws. */
-function readBridge(sessionId) {
+/** Write the RAW used% to the bridge for context-monitor.js. Never throws. */
+function writeBridge(sessionId, rawUsed, normalizedUsed, threshold) {
   try {
-    const raw = fs.readFileSync(bridgePath(sessionId), "utf8");
-    return JSON.parse(raw);
+    fs.writeFileSync(
+      bridgePath(sessionId),
+      JSON.stringify(
+        {
+          raw_used_pct: rawUsed,
+          normalized_used_pct: normalizedUsed,
+          threshold,
+          timestamp: new Date().toISOString(),
+          session_id: sessionId,
+        },
+        null,
+        2
+      )
+    );
   } catch {
-    return null;
+    /* best-effort */
   }
 }
 
-/** Pick the threshold bucket for a given percent. */
+/** Threshold bucket for a normalized percent. */
 function bucketFor(percent) {
   let chosen = THRESHOLDS[0];
   for (const t of THRESHOLDS) if (percent >= t.min) chosen = t;
   return chosen;
 }
 
-/** Render a 10-segment bar like [████░░░░░░]. */
+/** 10-segment bar like [████░░░░░░]. */
 function renderBar(percent, color) {
-  const filled = Math.max(0, Math.min(10, Math.round(percent / 10)));
+  const filled = Math.max(0, Math.min(10, Math.floor(percent / 10)));
   const bar = "█".repeat(filled) + "░".repeat(10 - filled);
   return `${color}[${bar}]${RESET}`;
+}
+
+/**
+ * Compute normalized + raw used% from the runtime payload.
+ * Exported shape kept simple for testing.
+ */
+export function computeUsage(data, env = process.env) {
+  const remaining = Number(data?.context_window?.remaining_percentage);
+  const totalCtx = Number(data?.context_window?.total_tokens) || DEFAULT_TOTAL_TOKENS;
+
+  // If the runtime didn't give us a remaining %, we can't read real context.
+  if (!Number.isFinite(remaining)) return null;
+
+  const acw = parseInt(env.CLAUDE_CODE_AUTO_COMPACT_WINDOW || "0", 10);
+  const bufferPct =
+    acw > 0 ? Math.min(100, (acw / totalCtx) * 100) : DEFAULT_AUTO_COMPACT_PCT;
+
+  const usableRemaining = Math.max(
+    0,
+    ((remaining - bufferPct) / (100 - bufferPct)) * 100
+  );
+  const normalizedUsed = Math.max(0, Math.min(100, Math.round(100 - usableRemaining)));
+  const rawUsed = Math.max(0, Math.min(100, Math.round(100 - remaining)));
+
+  return { normalizedUsed, rawUsed };
+}
+
+/** Render the statusline string for a payload. Exported for testing. */
+export function renderStatusline(data, env = process.env) {
+  const usage = computeUsage(data, env);
+  if (!usage) {
+    // No real context info available -- render a neutral, honest placeholder.
+    return "Polis [──────────] context n/a";
+  }
+  const bucket = bucketFor(usage.normalizedUsed);
+  const bar = renderBar(usage.normalizedUsed, bucket.color);
+  return `${bucket.glyph} Polis ${bar} ${usage.normalizedUsed}% ${bucket.color}${bucket.name}${RESET}`;
 }
 
 // ----------------------------------------------------------------------------
 // Main
 // ----------------------------------------------------------------------------
 function main() {
-  const stdin = readStdin();
+  // 3s guard so a stuck pipe never hangs the prompt.
+  const guard = setTimeout(() => process.exit(0), 3000);
+  guard.unref?.();
 
-  // Claude Code passes a session JSON on stdin. We only need the session id
-  // (and the model window, if present) -- everything else is ignored.
-  let session = {};
+  const stdin = readStdin();
+  let data = {};
   try {
-    session = stdin ? JSON.parse(stdin) : {};
+    data = stdin ? JSON.parse(stdin) : {};
   } catch {
-    session = {};
+    data = {};
   }
 
   const sessionId =
-    session.session_id || session.sessionId || process.env.CLAUDE_SESSION_ID || "default";
-  const windowTokens =
-    Number(session.model?.context_window) ||
-    Number(session.context_window) ||
-    DEFAULT_WINDOW_TOKENS;
+    data.session_id || data.sessionId || process.env.CLAUDE_SESSION_ID || "default";
 
-  const bridge = readBridge(sessionId);
+  const usage = computeUsage(data);
+  if (usage) {
+    const threshold = bucketFor(usage.normalizedUsed).name;
+    // Bridge stores RAW used% (matches native /context); monitor reads it.
+    writeBridge(sessionId, usage.rawUsed, usage.normalizedUsed, threshold);
+  }
 
-  // Estimate used tokens from accumulated tool I/O bytes (heuristic).
-  const usedBytes = Number(bridge?.used_bytes) || 0;
-  const estimatedTokens = usedBytes / APPROX_BYTES_PER_TOKEN;
-
-  // Usable budget = window minus the auto-compact reserve.
-  const usableTokens = windowTokens * (1 - AUTO_COMPACT_RESERVE);
-  const percent = Math.max(0, Math.min(100, (estimatedTokens / usableTokens) * 100));
-  const rounded = Math.round(percent);
-
-  const bucket = bucketFor(rounded);
-  const bar = renderBar(rounded, bucket.color);
-
-  // Final statusline. "~" signals this is an estimate, on purpose.
-  process.stdout.write(
-    `${bucket.glyph} Polis ${bar} ~${rounded}% ${bucket.color}${bucket.name}${RESET}`
-  );
+  process.stdout.write(renderStatusline(data));
+  clearTimeout(guard);
 }
 
-main();
+// Only run main when executed directly, not when imported for testing.
+import { fileURLToPath } from "node:url";
+if (process.argv[1] && fileURLToPath(import.meta.url) === fs.realpathSync(process.argv[1])) {
+  main();
+}

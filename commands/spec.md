@@ -10,12 +10,19 @@ writing-specs skill (skills/writing-specs).
 
 ## What it does
 
-1. Load `.claude/polis/specs/design-<feature>.md`. If it's missing, note that
-   there's no approved design and offer `/polis:discuss` first (or proceed with
-   the skip marker if the user insists).
+1. Load the design input. Two cases:
+   - **Single feature:** load `.claude/polis/specs/design-<feature>.md`. If
+     missing, offer `/polis:discuss` first (or proceed with the skip marker if the
+     user insists).
+   - **A phase from a roadmap:** if the argument names a roadmap phase, read that
+     phase from `.claude/polis/ROADMAP.md` — locate `### Phase <N>:` and use its
+     Goal, Requirements, and Success Criteria as the approved design input. The
+     requirement details live in REQUIREMENTS.md. This is how a roadmapped project
+     specs each phase without re-discussing it.
 2. Draft the spec with all required sections: architecture & decisions,
    interfaces & contracts, edge cases & error handling, measurable acceptance
-   criteria, and a feature-specific "what NOT to do."
+   criteria, and a feature-specific "what NOT to do." For a phase, the roadmap's
+   success criteria become the backbone of the acceptance criteria.
 3. Apply the quality test: read it back as a context-free subagent would and
    close every spot that would force a question.
 4. Run the review loop with the user — present, adjust, repeat — until approved.

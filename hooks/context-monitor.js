@@ -5,25 +5,26 @@
  * Runs as a Claude Code PostToolUse hook. Fires after every tool call.
  *
  * RESPONSIBILITIES:
- *   1. Accumulate an ESTIMATE of context usage by adding the byte-size of this
- *      tool call's input + output to a per-session bridge file in os.tmpdir().
- *      (statusline.js reads this same file to draw the bar.)
- *   2. Compute the usable-context percentage and, when a threshold is crossed,
- *      surface guidance to the model.
- *   3. In CRITICAL, write a "crash breadcrumb" into the project's STATE.md so
- *      no work is lost if the session is compacted or dies.
+ *   1. Read the REAL context usage. Two sources, in order of preference:
+ *      (a) the PostToolUse payload, if it carries context_window info; else
+ *      (b) the bridge file written by statusline.js, which stores the RAW
+ *          used% (matching Claude Code's native /context readout).
+ *   2. When a threshold is crossed, surface guidance to the model (via stderr).
+ *   3. In CRITICAL, write a "crash breadcrumb" into STATE.md so no work is lost
+ *      if the session is compacted or dies.
  *
- * HONEST LIMITATIONS (read this):
- *   - Claude Code does NOT give hooks the real context percentage, so this is
- *     an estimate from observed tool I/O. It will undercount tokens it never
- *     sees (e.g. the system prompt, prior turns) and is therefore conservative
- *     about how much HEADROOM exists -- by design.
- *   - PostToolUse is observability-only: it CANNOT inject text into the model's
- *     prompt and CANNOT block. So "injecting a warning" here means printing a
- *     structured note to stderr (which Claude Code surfaces in verbose/transcript)
- *     AND recording the threshold in the bridge file. The actual in-prompt nudge
- *     is delivered by a SessionStart/UserPromptSubmit hook + the context-mgmt
- *     skill, which CAN add context. This file is the sensor; the skill is the voice.
+ * RAW vs NORMALIZED:
+ *   The monitor judges thresholds on the RAW used% (100 - remaining), matching
+ *   the native /context numbers, so its CRITICAL fires in step with what the
+ *   user sees in /context. (The statusline bar uses the NORMALIZED value, which
+ *   intentionally warns earlier for action.) See statusline.js for the split.
+ *
+ * NOTE on PostToolUse limits:
+ *   PostToolUse is observability-only: it CANNOT inject text into the model's
+ *   prompt and CANNOT block. So guidance here goes to stderr (surfaced in
+ *   verbose/transcript). The in-prompt nudge is delivered by the
+ *   SessionStart/UserPromptSubmit hook + the context-mgmt skill. This file is
+ *   the sensor; the skill is the voice.
  *
  * INPUT:  JSON on stdin (the PostToolUse payload).
  * OUTPUT: exit 0 always (never block the runtime). Notes go to stderr.
@@ -38,18 +39,18 @@ import path from "node:path";
 import { execSync } from "node:child_process";
 
 // ----------------------------------------------------------------------------
-// Tunables (mirror statusline.js; config.json may override).
+// Tunables.
 // ----------------------------------------------------------------------------
-const AUTO_COMPACT_RESERVE = 0.165;
-const DEFAULT_WINDOW_TOKENS = 200_000;
-const APPROX_BYTES_PER_TOKEN = 4;
+const DEFAULT_AUTO_COMPACT_PCT = 16.5;
+const DEFAULT_TOTAL_TOKENS = 1_000_000;
 const TIMEOUT_MS = 10_000;
 
+// Thresholds judged on RAW used% (matches native /context).
 const THRESHOLDS = [
   { name: "OK", min: 0 },
-  { name: "WARNING", min: 41 },
-  { name: "HIGH", min: 61 },
-  { name: "CRITICAL", min: 75 },
+  { name: "WARNING", min: 40 },
+  { name: "HIGH", min: 65 },
+  { name: "CRITICAL", min: 80 },
 ];
 
 // ----------------------------------------------------------------------------
@@ -84,31 +85,10 @@ function readBridge(p) {
   }
 }
 
-function writeBridge(p, data) {
-  try {
-    fs.writeFileSync(p, JSON.stringify(data, null, 2));
-  } catch {
-    /* best-effort; never throw */
-  }
-}
-
 function bucketFor(percent) {
   let chosen = THRESHOLDS[0];
   for (const t of THRESHOLDS) if (percent >= t.min) chosen = t;
   return chosen.name;
-}
-
-/** Byte-size of an arbitrary value once serialized. */
-function sizeOf(value) {
-  if (value == null) return 0;
-  try {
-    return Buffer.byteLength(
-      typeof value === "string" ? value : JSON.stringify(value),
-      "utf8"
-    );
-  } catch {
-    return 0;
-  }
 }
 
 /**
@@ -158,7 +138,7 @@ function writeBreadcrumb(payload) {
     "",
     "<!-- POLIS:CRASH-BREADCRUMB -->",
     `## Stopped At (auto, CRITICAL) — ${ts}`,
-    `- Trigger: context monitor crossed CRITICAL (~75%+ usable).`,
+    `- Trigger: context monitor crossed CRITICAL (80%+ of context used, matches /context).`,
     `- Last tool observed: ${lastTool}`,
     `- Uncommitted files (${files.length}): ${files.length ? files.join(", ") : "none detected"}`,
     `- Action required: run /polis:pause-work, then /compact, then /polis:resume-work.`,
@@ -191,48 +171,42 @@ function main() {
     payload.sessionId ||
     process.env.CLAUDE_SESSION_ID ||
     "default";
-  const windowTokens =
-    Number(payload.model?.context_window) ||
-    Number(payload.context_window) ||
-    DEFAULT_WINDOW_TOKENS;
 
-  // Size of this tool call (input + output), in bytes.
-  const inBytes = sizeOf(payload.tool_input ?? payload.input);
-  const outBytes = sizeOf(payload.tool_response ?? payload.tool_output ?? payload.output);
-  const deltaBytes = inBytes + outBytes;
+  // Determine the RAW used% from the real context window.
+  // Source (a): payload carries context_window (preferred, freshest).
+  // Source (b): the bridge file statusline.js wrote (raw_used_pct).
+  let rawUsed = null;
+  const remaining = Number(payload?.context_window?.remaining_percentage);
+  if (Number.isFinite(remaining)) {
+    rawUsed = Math.max(0, Math.min(100, Math.round(100 - remaining)));
+  } else {
+    const bridge = readBridge(bridgePath(sessionId));
+    if (bridge && Number.isFinite(Number(bridge.raw_used_pct))) {
+      rawUsed = Number(bridge.raw_used_pct);
+    }
+  }
 
-  // Accumulate into the bridge file.
-  const bp = bridgePath(sessionId);
-  const prev = readBridge(bp) || { used_bytes: 0 };
-  const usedBytes = Number(prev.used_bytes || 0) + deltaBytes;
+  // No real context info available this turn -> nothing to judge; exit clean.
+  if (rawUsed == null) {
+    clearTimeout(guard);
+    process.exit(0);
+  }
 
-  const estimatedTokens = usedBytes / APPROX_BYTES_PER_TOKEN;
-  const usableTokens = windowTokens * (1 - AUTO_COMPACT_RESERVE);
-  const percent = Math.max(0, Math.min(100, (estimatedTokens / usableTokens) * 100));
-  const rounded = Math.round(percent);
-  const threshold = bucketFor(rounded);
-
-  writeBridge(bp, {
-    used_bytes: usedBytes,
-    percent_used: rounded,
-    threshold,
-    timestamp: new Date().toISOString(),
-    session_id: sessionId,
-  });
+  const threshold = bucketFor(rawUsed);
 
   // Surface guidance via stderr (PostToolUse cannot edit the prompt).
   // The context-mgmt skill turns these signals into in-prompt behavior.
   if (threshold === "WARNING") {
     process.stderr.write(
-      "[polis] Context past 40% (WARNING). Orchestrator past its ceiling — start delegating to subagents and prefer short tasks.\n"
+      "[polis] Context past 40% (WARNING). Start delegating heavy work to subagents and prefer short tasks.\n"
     );
   } else if (threshold === "HIGH") {
     process.stderr.write(
-      "[polis] Context above 60% (HIGH). Accuracy compromised — finish the current task, commit, and prepare /polis:pause-work.\n"
+      "[polis] Context past 65% (HIGH). Accuracy compromised — finish the current task, commit, and prepare /polis:pause-work.\n"
     );
   } else if (threshold === "CRITICAL") {
     process.stderr.write(
-      "[polis] CRITICAL (~75%+). Saving a crash breadcrumb and requiring pause. Run /polis:pause-work -> /compact -> /polis:resume-work.\n"
+      "[polis] CRITICAL (80%+). Saving a crash breadcrumb and requiring pause. Run /polis:pause-work -> /compact -> /polis:resume-work.\n"
     );
     writeBreadcrumb(payload);
   }

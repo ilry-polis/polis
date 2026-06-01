@@ -49,12 +49,28 @@ wrong, and say what would fix it. A finding without a remedy is just a complaint
 3. **Quality** — conventions, clarity, error handling, test integrity. Use the
    project's own standards (skills/project-detect), not imported ones.
 
+## Verify independently — don't trust the self-report
+
+When the code under review came from a subagent that reported "done, tests pass,"
+that report is a claim, not proof. Re-run the suite and read the output yourself
+(skills/verification-before-completion). A review that takes the author's word
+for it isn't a review. Subagents are trusted to do the work, not to grade it.
+
 ## Output
 
-Lead with the verdict: is it mergeable, or are there blockers? Then the findings,
-grouped by severity, CRITICAL first. Keep each finding tight — location, problem,
-fix. Don't pad the review; a long review buries the findings that matter under
-the ones that don't.
+Structure the review so it's fair and actionable:
+
+1. **Strengths first** — briefly name what's done well. This isn't politeness for
+   its own sake; it calibrates the review (the author knows you read it all) and
+   keeps the critical findings from reading as a pile-on.
+2. **The verdict** — mergeable, or blocked? Say it early.
+3. **Findings by severity**, 🔴 CRITICAL first, then 🟡 WARNING, 🔵 INFO. Each
+   with location, problem, fix.
+4. **Assessment + reasoning** — the explicit close: Ready / Ready with fixes /
+   Not ready, and why.
+
+Keep each finding tight — location, problem, fix. Don't pad the review; a long
+review buries the findings that matter under the ones that don't.
 
 ## Boundary
 

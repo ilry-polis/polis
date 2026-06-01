@@ -44,6 +44,49 @@ the *correct* reason proves the test actually exercises the behavior. A test
 that would pass even with the feature removed is testing nothing. Confirm the
 failure mode is the absence of the behavior, then proceed.
 
+## One assertion per test
+
+A test checks one behavior. If the test name needs an "and" — `test_saves_and_emails`
+— it's two tests; split it. When a single-behavior test fails, you know exactly
+what broke. When a five-assertion test fails, you go hunting.
+
+## The rationalizations — and why each is wrong
+
+TDD discipline doesn't break by decision; it breaks by excuse. These are the
+excuses, named, so you recognize them as they form — each one is the sound of the
+discipline slipping:
+
+- *"This is too simple to test."* Simple code breaks too, and the test costs
+  seconds. If it's truly trivial, the test is trivial — write it.
+- *"I'll add the test after."* After means never, or a test shaped to fit the
+  code's bugs. The test goes first because it defines correct independently.
+- *"I already wrote the code, deleting it is wasteful."* Sunk cost. The code was
+  written without a definition of done; re-deriving it test-first is usually
+  cleaner, not slower.
+- *"TDD is dogmatic / slows me down."* The slowdown is the thinking you were
+  skipping. Test-first surfaces edge cases now instead of in production.
+- *"I know it works, I can see it."* Then the test passes immediately and costs
+  nothing. If you can't be bothered to prove it, you don't know it.
+- *"The test is hard to write."* That's the design talking, not the test. Hard-to-
+  test usually means too-coupled — fix the design (see references/tdd-anti-patterns.md).
+
+If you hear yourself thinking one of these, that's the signal to follow the
+cycle, not abandon it.
+
+## Red flags — stop and restart the cycle
+
+Any of these means you've left TDD and need to reset to RED:
+
+- Production code exists with no failing test behind it.
+- A new test passes the moment you write it (you're testing existing behavior).
+- You can't explain *why* the RED test failed.
+- You're reaching for any rationalization above.
+
+The reset is the same every time: delete the untested code, write the failing
+test, watch it fail for the right reason, then proceed. Restarting feels like
+losing ground; it's the opposite — it's getting back onto the only path that
+ends in verified code.
+
 ## Framework-adaptive
 
 Use whatever test framework the project already uses — detected by

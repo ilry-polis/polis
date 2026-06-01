@@ -1,9 +1,8 @@
 {
   "name": "polis",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Context engineering + spec-driven development with isolated subagents for Codex CLI.",
   "license": "MIT",
   "skills": "./.agents/skills",
-  "hooks": "./hooks/hooks.json",
   "//": "Codex plugin manifest (official .codex-plugin/plugin.json, per the March 2026 plugin spec). Skills are discovered under .agents/skills/. Hook and subagent wiring for config.toml is provided as TOML fragments in scripts/fragments/ and applied by scripts/install.sh. Codex runs command hooks only -- prompt/agent handlers are parsed but skipped."
 }

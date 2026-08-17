@@ -1,80 +1,73 @@
 ---
 name: code-review
-description: Use to review code against the spec and plan that defined it. Activates on /polis:review and as the review step after each task in execution. Runs a pre-review checklist, then classifies findings by severity (CRITICAL / WARNING / INFO). CRITICAL findings block merge. Reviews for spec compliance and quality, not personal style.
+description: Review code against the approved spec/plan with evidence. During execution, review at the batch boundary and scale scrutiny by risk; reserve independent two-phase review for high-risk work or explicit /polis:review.
 ---
 
 # Code Review
 
-Review answers one question: *does this code do what the spec said, well?* It is
-not a place to relitigate the design or impose personal taste — those decisions
-were made in discuss and spec. Review checks compliance and quality against an
-agreed standard.
+Review answers: *does this code do what the approved spec said, well?* Review
+must catch real defects without turning every tiny task into another expensive
+agent workflow.
+
+## Execution review policy
+
+During `/polis:exec`:
+
+- **Low/medium-risk batch:** one combined compliance + quality pass after the
+  batch, backed by targeted tests and relevant lint/type checks. Do not spawn a
+  separate reviewer for each task by default.
+- **High-risk task/batch:** use stronger independent scrutiny. Auth,
+  authorization, billing/payments, security boundaries, destructive data work,
+  migrations, and privacy-sensitive flows default high risk.
+- **Explicit `/polis:review`:** perform the full review requested by the user,
+  but parallel reviewers are optional, not automatic.
 
 ## Pre-review checklist
 
-Before reading the code for substance, confirm the basics. Any "no" is a finding
-in itself:
+Before substantive review:
 
-- Do all tests pass?
-- Is lint/format clean?
-- No TODO/FIXME left in production code?
-- No stray debug output (console.log, print, dbg!, etc.)?
-- Are the spec's acceptance criteria and the plan's tasks actually covered?
+- Targeted tests for changed behavior pass.
+- Relevant lint/format/type checks are clean.
+- No TODO/FIXME or stray debug output was introduced.
+- Acceptance criteria covered by the batch are accounted for.
 
-If the basics fail, the review can stop there — fix those first, then review.
+Run the full suite only at a meaningful integration boundary, for high-risk work
+where breadth is necessary, or during `/polis:verify`. Re-running the full suite
+after every microchange is not evidence-efficient.
 
-## Severity classification
+## Severity
 
-Every finding gets a severity. This is what makes review actionable instead of
-a wall of equally-weighted comments:
+- 🔴 **CRITICAL** — blocks progress: bugs, spec violations, security issues,
+  data-loss risks, broken required tests.
+- 🟡 **WARNING** — resolve before merge: material code smells, performance risks,
+  missing error handling, fragile tests.
+- 🔵 **INFO** — optional suggestions; never block.
 
-- 🔴 **CRITICAL** — blocks progress. Bugs, spec violations, security issues,
-  data-loss risks, broken tests. **CRITICAL findings block merge.** No
-  exceptions; the work isn't done until they're resolved.
-- 🟡 **WARNING** — must be resolved before merge. Code smells, performance
-  problems, missing error handling, fragile tests. Not a hard block in the
-  moment, but the bar to merge.
-- 🔵 **INFO** — suggestions. Naming, style nuance, optional refactors. Take them
-  or leave them; they never block.
-
-For each finding: state the severity, point to the exact location, say what's
-wrong, and say what would fix it. A finding without a remedy is just a complaint.
+For each finding: location, concrete problem, and smallest defensible fix.
 
 ## What to review against
 
-1. **The spec** — does the code satisfy the acceptance criteria? Did it
-   implement what was asked, nothing missing, nothing extra?
-2. **The plan** — were the tasks done as planned, or did execution drift? Drift
-   isn't automatically wrong, but it should be visible.
-3. **Quality** — conventions, clarity, error handling, test integrity. Use the
-   project's own standards (skills/project-detect), not imported ones.
+1. **Spec** — acceptance criteria, nothing missing/extra.
+2. **Plan/batch** — implementation stayed within approved scope.
+3. **Quality** — conventions, clarity, error handling, test integrity.
 
-## Verify independently — don't trust the self-report
+## Repair policy
 
-When the code under review came from a subagent that reported "done, tests pass,"
-that report is a claim, not proof. Re-run the suite and read the output yourself
-(skills/verification-before-completion). A review that takes the author's word
-for it isn't a review. Subagents are trusted to do the work, not to grade it.
+Prefer one focused follow-up to the same implementation runner while its local
+context is useful. Do not spawn a fresh fix agent for every finding. Two failed
+repair attempts on the same defect ⇒ stop and surface the gap.
+
+## Independent evidence
+
+A runner's "tests pass" is a claim, not proof. The orchestrator should verify the
+important evidence itself, but do so at the correct boundary: targeted checks per
+batch and holistic checks at `/polis:verify`.
 
 ## Output
 
-Structure the review so it's fair and actionable:
+1. Verdict: ready / ready with fixes / blocked.
+2. Findings by severity.
+3. Evidence checked.
+4. Any spec/plan mismatch that should return to an earlier phase.
 
-1. **Strengths first** — briefly name what's done well. This isn't politeness for
-   its own sake; it calibrates the review (the author knows you read it all) and
-   keeps the critical findings from reading as a pile-on.
-2. **The verdict** — mergeable, or blocked? Say it early.
-3. **Findings by severity**, 🔴 CRITICAL first, then 🟡 WARNING, 🔵 INFO. Each
-   with location, problem, fix.
-4. **Assessment + reasoning** — the explicit close: Ready / Ready with fixes /
-   Not ready, and why.
-
-Keep each finding tight — location, problem, fix. Don't pad the review; a long
-review buries the findings that matter under the ones that don't.
-
-## Boundary
-
-Review judges the code against the spec. If the *spec itself* turns out wrong —
-the code is compliant but the requirement was misguided — that's not a review
-finding, it's a signal to go back to spec with the user. Flag it as such rather
-than forcing a fix at the code layer.
+Keep the review tight. Length is not rigor.

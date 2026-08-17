@@ -1,65 +1,60 @@
 ---
-description: Initialize Polis in the current project — create the state directory, scaffold STATE.md and config.json, and detect the project stack. Run once per project before using the workflow.
+description: Initialize Polis in the current project — scaffold state/config, detect the stack, and seed token-efficient orchestration defaults. Safe to rerun without clobbering state.
 argument-hint: "[optional project/milestone name]"
 ---
 
 # /polis:init
 
-Set up Polis in this repository so the workflow and state tracking have a home.
-Safe to run more than once — it won't clobber existing state, only fill in
-what's missing.
+Set up Polis in this repository.
 
 ## Steps
 
-1. **Create the state tree** under `.claude/polis/` (or the runtime-equivalent
-   path):
+1. Create the runtime-equivalent Polis state tree:
    - `STATE.md`
    - `config.json`
    - `specs/`, `plans/`, `history/`
-   If any already exist, leave them as-is and report what was already there.
+   Existing files are merge-filled, never overwritten.
 
-2. **Detect the stack.** Invoke the project-detection logic (skills/project-detect):
-   scan for ecosystem markers, identify framework(s) and package manager, handle
-   monorepos. If detection is uncertain, ask the user and record the answer.
+2. Detect the stack using `skills/project-detect`. Handle monorepos and record
+   uncertainty rather than guessing.
 
-3. **Write `config.json`** with detected stack and default toggles:
-   ```json
-   {
-     "stack": { "...": "from detection" },
-     "context": {
-       "windowTokens": 200000,
-       "autoCompactReserve": 0.165,
-       "bytesPerToken": 4,
-       "orchestratorTargetPct": 40
-     },
-     "workflow": {
-       "requireDiscuss": true,
-       "requireSpec": true,
-       "requirePlan": true,
-       "tddMandatory": true
-     }
-   }
-   ```
+3. Seed missing `config.json` values:
 
-4. **Seed `STATE.md`** with an empty-but-valid skeleton:
-   ```
-   # Polis — Project State
-   ## Current Milestone: <name from $ARGUMENTS, or "unset">
-   ## Phase: discuss
-   ## Progress: 0/0 tasks complete
-   ## Last Commit: <current HEAD short hash + message>
-   ## Previous Session: <timestamp> init
-   ## Decisions:
-   ## Notes:
-   ## Stopped At:
-   ```
+```json
+{
+  "stack": { "...": "from detection" },
+  "context": {
+    "windowTokens": 200000,
+    "autoCompactReserve": 0.165,
+    "bytesPerToken": 4,
+    "orchestratorTargetPct": 40
+  },
+  "workflow": {
+    "requireDiscuss": true,
+    "requireSpec": true,
+    "requirePlan": true,
+    "tddMandatory": true
+  },
+  "orchestration": {
+    "maxTasksPerBatch": 3,
+    "maxConcurrentAgents": 2,
+    "maxWaitCyclesPerWave": 2,
+    "reviewMode": "risk-based",
+    "allowDirectLowRisk": true
+  }
+}
+```
 
-5. **Confirm** with a short summary: what was created, the detected stack, and
-   the suggested first step (`/polis:discuss` to start a feature).
+These defaults intentionally cap coordination fan-out. They preserve TDD and
+atomic commits while avoiding one-subagent-per-microtask behavior.
+
+4. Seed `STATE.md` with current milestone, phase, progress, HEAD, timestamp,
+   decisions, notes, and stopped-at breadcrumb.
+
+5. Confirm what was created/detected and suggest `/polis:discuss`.
 
 ## Guardrails
 
-- Never overwrite an existing STATE.md or config.json; merge-fill only.
-- Don't commit anything in init — setup is local until the user decides.
-- If `.claude/` is gitignored (common), note that Polis state won't be tracked
-  and let the user decide whether to track it.
+- Never overwrite STATE.md/config.json; merge-fill only missing keys.
+- Don't commit init setup unless the user asks.
+- If the state directory is gitignored, note it and let the user decide.

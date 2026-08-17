@@ -1,81 +1,69 @@
 ---
 name: using-plugin
-description: Use to understand how the whole Polis system fits together — the workflow phases, when each skill and command applies, how context management and subagents interact, and the principles that govern everything. The orienting meta-skill; consult it when unsure which part of Polis applies or how the pieces connect.
+description: Use to understand the whole Polis workflow, token-efficient context management, bounded subagent orchestration, TDD, review, and phase gates.
 ---
 
 # Using Polis
 
-Polis is a workflow, not a toolbox. The individual skills and commands only make
-sense as parts of one loop: think before building, build in small verified
-steps, and keep the context window lean the whole way. This skill is the map.
+Polis is one loop: **discuss → spec → plan → exec → verify**. For a new/large
+project, roadmap sits between discuss and spec and cuts work into phases.
 
-## The one-sentence model
+The goal is high-confidence engineering with minimal coordination waste: think
+before building, plan coherent units, execute with TDD + atomic commits, and use
+subagents only when their isolation or parallelism is worth another model thread.
 
-Drive every build through **discuss → spec → plan → exec → verify**, keeping the
-orchestrator under 40% by pushing heavy work into fresh-context subagents, with
-TDD and atomic commits throughout, and the user approving each phase. For a whole
-new project, **roadmap** sits between discuss and spec: it cuts the app into
-phases, and you then run spec → plan → exec → verify on each phase, one at a time.
-
-## The phases, and what runs each
+## Phases
 
 | Phase | Command | Skill | Produces |
 |---|---|---|---|
-| Discuss | `/polis:discuss` | brainstorming | `design-<f>.md` (+ REQUIREMENTS.md for new projects) |
-| Roadmap | `/polis:roadmap` | roadmapping | `ROADMAP.md` (phases) — new/large projects only |
-| Spec | `/polis:spec` | writing-specs | `spec-<f>-v<n>.md` |
-| Plan | `/polis:plan` | writing-plans | `plan-<f>-v<n>.md` |
+| Discuss | `/polis:discuss` | brainstorming | approved design |
+| Roadmap | `/polis:roadmap` | roadmapping | phased ROADMAP.md |
+| Spec | `/polis:spec` | writing-specs | executable spec |
+| Plan | `/polis:plan` | writing-plans | coherent tasks + batches |
 | Exec | `/polis:exec` | executing-plans + subagent-dispatch + tdd | atomic commits |
-| Verify | `/polis:verify` | finishing-work + code-review | merge-ready feature |
+| Verify | `/polis:verify` | finishing-work + code-review | merge-ready evidence |
 
-Cross-cutting, always on: **context-mgmt** (watches the window), **project-detect**
-(knows the stack), **code-review** (the review step inside exec and verify),
-**debugging** (when work breaks — root-cause before fix), and
-**verification-before-completion** (evidence before any "done" claim).
+Cross-cutting: context-mgmt, project-detect, code-review, debugging, and
+verification-before-completion.
 
-## When each piece fires
+## Execution mental model
 
-Most skills activate by context, not by command — that's the design (principle:
-skills fire automatically). You don't have to be told to manage context or detect
-the stack; the descriptions trigger them. The commands are explicit entry points
-for when the user wants to drive a specific phase.
+- Plans prefer roughly 5–12 meaningful tasks per feature phase, not 2–5 minute
+  microtasks.
+- Related tasks may form a batch of 1–3. One runner can execute the batch
+  sequentially while keeping one TDD cycle + one commit per task.
+- Trivial low-risk work may be executed directly when delegation would cost more
+  than the work.
+- Default write parallelism is at most 2 runners.
+- Runner depth is exactly 1: no nested subagents.
+- Waiting is bounded: one wave wait, useful coordinator work, at most one later
+  wait. Never poll agents in a tight model loop.
+- Low/medium-risk work gets one evidence-backed batch review; high-risk work gets
+  stronger independent scrutiny.
 
-- User describes something to build → **brainstorming** wakes up. Don't code.
-- Design agreed → **writing-specs**.
-- Spec agreed → **writing-plans**.
-- Executing → **executing-plans** dispatches to subagents (**subagent-dispatch**),
-  each doing **tdd**; **code-review** gates each task.
-- Finishing → **finishing-work** verifies and prepares handoff.
-- Throughout → **context-mgmt** reads the monitor; at WARNING/HIGH/CRITICAL it
-  changes behavior (short tasks → finish-and-commit → pause).
+## Context is a budget, not a delegation trigger
 
-## Support commands
+Keep the orchestrator lean with file anchors, targeted reads, concise outputs,
+git, and STATE.md. A high context percentage means shrink/checkpoint/pause — it
+does not mean "spawn another agent" automatically. Subagent workflows do their
+own model/tool work, so delegation must have a reason.
 
-`/polis:init` (set up), `/polis:roadmap` (phase a new project), `/polis:status`
-(where am I), `/polis:next` (what next), `/polis:health` (is Polis intact),
-`/polis:config` (toggles), `/polis:pause-work` & `/polis:resume-work` (stop and
-restart without loss).
+## State
 
-## The state that ties it together
+`.claude/polis/STATE.md` records phase, progress, decisions, commits, and the
+pause/resume breadcrumb. Specs/plans hold intent; git holds implementation.
+Store outcomes, not transcripts.
 
-`.claude/polis/STATE.md` is the single source of truth for where the project is —
-phase, progress, decisions, and the `Stopped At` breadcrumb for pause/resume.
-`specs/` and `plans/` hold versioned intent. `history/` holds finished-milestone
-summaries. `config.json` holds preferences. Git holds the code. Between git and
-STATE.md, no work is ever lost to a context reset.
+## Principles
 
-## The principles, compressed
+1. Discuss/spec/plan before code.
+2. Spend context on decisions/evidence, not replayed history.
+3. Use the fewest coherent tasks and agent threads that preserve correctness.
+4. TDD: RED → GREEN → REFACTOR.
+5. One task, one reversible commit — even when tasks share a runner batch.
+6. Review intensity follows risk.
+7. State survives sessions.
+8. The user controls phase transitions and irreversible actions.
 
-1. Don't jump to code — discuss/spec/plan first.
-2. Context is sacred — orchestrator under 40%, heavy work in subagents.
-3. Every task is atomic — one commit, reversible.
-4. TDD is not optional — RED → GREEN → REFACTOR.
-5. State survives sessions — pause and resume without loss.
-6. The user is in control — each phase needs approval; Polis proposes, the human
-   decides.
-
-## How to think about it
-
-When in doubt, ask two questions: *which phase am I in?* and *is the orchestrator
-getting heavy?* The first tells you which skill applies; the second tells you
-whether to delegate or pause. Almost every Polis decision reduces to those two.
+When unsure, ask: *which phase am I in, what evidence is needed, and does another
+agent actually buy enough isolation/speed to justify its coordination cost?*

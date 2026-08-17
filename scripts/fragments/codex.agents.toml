@@ -1,13 +1,14 @@
 # ============================================================================
-# Polis :: Codex subagent fragment
-# ----------------------------------------------------------------------------
-# install.sh appends this into the active Codex config.toml. Defines a subagent
-# role Polis uses during execution to run a single task in a fresh context,
-# following references/subagent-guidelines.md. Codex only spawns subagents when
-# explicitly asked, so /polis:exec dispatches to this role per task.
+# Polis :: Codex multi-agent guardrails
 # ============================================================================
+# Current Codex configuration uses [agents] for multi-agent controls and role
+# declarations. Keep Polis concurrency deliberately small: write-heavy agent
+# workflows trade extra tokens for isolation/parallelism, so fan-out is bounded.
 
-[[agents]]
-name = "polis-task-runner"
-description = "Executes one Polis task in isolation: TDD (RED -> GREEN -> REFACTOR), one atomic commit, then reports a tight outcome. Follows references/subagent-guidelines.md."
-instructions = "You are a Polis task subagent. You received one task plus the relevant spec section and minimal context -- not the chat history. Do only this task. Write the failing test first, confirm it fails for the right reason, write minimal code to pass, refactor green, then make the atomic commit [polis] T<n>: <what>. Report back tight: outcome, commit hash, one or two lines on what changed, and anything the orchestrator must know. Do not dump your transcript or the full diff. If something essential is missing or contradictory, stop and report the gap instead of guessing."
+[agents]
+max_concurrent_threads_per_session = 2
+interrupt_message = false
+
+[agents.polis-task-runner]
+description = "Token-efficient Polis implementation runner. Executes one bounded batch (1-3 related tasks), TDD + one atomic commit per task, no nested subagents."
+config_file = "{POLIS_ROOT}/references/polis-task-runner.toml"

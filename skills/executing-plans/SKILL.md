@@ -1,75 +1,100 @@
 ---
 name: executing-plans
-description: Use to execute an approved plan, task by task, via isolated subagents with fresh context. Activates on /polis:exec. Keeps the orchestrator under 40% by delegating heavy work; enforces TDD per task, atomic commits, and a two-phase (compliance + quality) review after each task. Auto-pauses when context hits WARNING.
+description: Use to execute an approved plan with token-efficient orchestration. Runs related tasks in bounded batches, uses subagents only where isolation helps, caps parallel write work, avoids polling loops, preserves TDD and atomic commits, and escalates review by risk.
 ---
 
 # Executing Plans
 
-Execution is where the architecture earns its keep. The orchestrator does not
-write the code — it dispatches each task to a subagent with a fresh window,
-reviews what comes back, and keeps a clean state. Heavy lifting happens where
-there's room for it; the orchestrator stays a lean coordinator.
+Execution should spend tokens on implementation and verification, not on
+coordination churn. The orchestrator owns sequencing and durable state; runners
+handle bounded batches when fresh context materially helps.
 
-## The loop, per task
+## Execution policy
 
-For each task in the approved plan, in dependency order:
+Read `.claude/polis/config.json` when present. Defaults:
 
-1. **Dispatch to a subagent.** Hand it the minimum it needs: the relevant spec
-   section, the task definition (incl. its test), and just enough surrounding
-   context to act. Not the whole project, not the chat history. (See
-   skills/subagent-dispatch for how to package this.)
+- `maxTasksPerBatch`: **3**
+- `maxConcurrentAgents`: **2**
+- `maxWaitCyclesPerWave`: **2**
+- `reviewMode`: **risk-based**
 
-2. **Subagent does TDD.** RED → GREEN → REFACTOR, non-negotiable (see
-   skills/tdd). It writes the failing test first, confirms it fails for the
-   right reason, writes the minimal code to pass, refactors if needed, keeps the
-   suite green.
+These are ceilings, not targets. One runner is preferable when parallelism adds
+coordination without meaningful wall-clock benefit.
 
-3. **Two-phase review** of what the subagent returns:
-   - **Phase 1 — Compliance:** does the code implement what the spec and task
-     asked, no more and no less? Are the acceptance criteria met?
-   - **Phase 2 — Quality:** does it follow the codebase's conventions? Any code
-     smells, dead code, leftover debug output, fragile tests?
-   If either phase fails, send it back to a subagent to fix *before* advancing.
-   Don't accumulate debt across tasks.
+## The loop, per batch
 
-4. **Atomic commit.** One task, one commit, with a standardized message that
-   references the task ID — e.g. `[polis] T4: add session-expiry guard`.
-   Reversible and traceable.
+For each approved execution batch in dependency order:
 
-5. **Record, don't accumulate.** Capture the *outcome* in STATE.md (task done,
-   commit hash, any decision made). Do not pull the subagent's full transcript
-   back into the orchestrator — that's how the window fills.
+1. **Choose direct vs runner.**
+   - Direct execution is allowed for a trivial, low-risk task when delegating it
+     would cost more coordination than doing it and the orchestrator is healthy.
+   - Otherwise dispatch **one `polis-task-runner` for 1–3 related tasks**. Do not
+     spawn one runner per microstep.
+   - High-risk work normally gets an isolated runner and its own batch.
 
-## Context discipline during execution
+2. **Brief by anchors, not transcript.** Send task IDs, the relevant plan/spec
+   sections, exact file paths, constraints, and done evidence. Never send chat
+   history, unrelated tasks, whole specs, or large pasted source when the runner
+   can read the named files itself.
 
-- Target: orchestrator **under 40%** throughout. The whole reason work goes to
-  subagents is to keep it there.
-- If the monitor reports **WARNING (40%+)** mid-execution: finish the *current*
-  task, commit it, and auto-pause (`/polis:pause-work`). Do not start the next
-  task in a degraded orchestrator. Resume with fresh context.
-- At **HIGH/CRITICAL**, the same reflex applies, more urgently — see
-  skills/context-mgmt.
+3. **Runner executes sequentially.** For every task in its batch: RED → GREEN →
+   REFACTOR, then one atomic commit `[polis] T<n>: <what>`. The runner must not
+   spawn subagents of its own.
+
+4. **Wait without polling.** After dispatching a wave, make one wait for the
+   active set. If some remain active, do useful coordinator work (state,
+   integration prep, independent deterministic checks) before at most one later
+   wait. **Never loop `wait`, `wait_agent`, `list_agents`, or status checks just
+   to ask whether work is done.** If the wave still has no actionable result
+   after the second wait cycle, stop the orchestration loop and surface status
+   instead of burning model turns.
+
+5. **Review by risk, once at the right boundary.**
+   - Low/medium risk: inspect the batch diff/outcome, run targeted tests and
+     lint/type checks once for the batch, and review compliance + quality in one
+     pass.
+   - High risk (auth, permissions, billing, security, destructive data/migration
+     boundaries): keep independent compliance + quality scrutiny and the
+     strongest relevant verification.
+   - Do not rerun a full suite after every small task. Run targeted evidence per
+     task/batch; reserve the full suite for integration boundaries and `/polis:verify`.
+
+6. **Repair in place.** Prefer one focused follow-up to the same runner while its
+   context is useful. Do not spawn a fresh fix agent for every finding. After two
+   failed repair attempts on the same defect, stop and escalate the gap.
+
+7. **Record, don't accumulate.** STATE.md gets task IDs, commit hashes, decisions,
+   blockers, and a one-to-two-line batch outcome. Do not import full transcripts,
+   diffs, test logs, or agent chatter into the orchestrator.
 
 ## Parallel waves
 
-Tasks with no dependency between them can run as a wave of parallel subagents.
-Only parallelize genuinely independent tasks — if two tasks touch the same file
-or one's output feeds the other, they're sequential. After a wave returns,
-review each result and resolve any integration seams before the next wave.
+Parallelism is for genuinely independent work, especially read-heavy work. For
+write-heavy execution:
+
+- maximum **2 active runners** by default;
+- never parallelize batches that touch the same files or integration seam;
+- prefer sequential execution when one batch feeds the next;
+- start another runner only when the expected speedup is worth another model
+  context and coordination path.
+
+## Context discipline
+
+Keep the main session lean, but **do not create subagents merely to satisfy an
+arbitrary context percentage**. First reduce what the orchestrator reads: use
+file anchors, summaries, git commits, targeted command output, and pause/resume.
+Delegation is a tool, not the default unit of work.
+
+At WARNING: avoid loading broad output and finish the current batch. At
+HIGH/CRITICAL: checkpoint and pause/resume before starting another batch.
 
 ## Stop conditions
 
 Halt and consult the user if:
-- a task can't be done as specified (the spec/plan was wrong) — don't improvise
-  around the spec, flag the mismatch;
-- review keeps failing on the same task after a couple of fix attempts;
-- the work reveals a design assumption that no longer holds.
+- the plan/spec is wrong or contradictory;
+- the same defect survives two focused repair attempts;
+- a design assumption no longer holds;
+- the workflow would exceed its agent/wait guardrails to make progress.
 
-When a task breaks in a way that isn't a quick correct fix — a test won't go
-green, behavior surprises you — switch into systematic debugging
-(skills/debugging) rather than guessing at patches. And never mark a task done on
-a subagent's say-so: verify the green independently (skills/verification-before-completion).
-
-Execution is mechanical *because* the thinking was front-loaded into discuss,
-spec, and plan. When execution stops being mechanical, that's a signal an
-earlier phase has a gap — go back, don't push through.
+When execution stops being mechanical, return to debugging/specification rather
+than multiplying agents.

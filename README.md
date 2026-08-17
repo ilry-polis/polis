@@ -36,8 +36,9 @@ the product into phases.
 
 - **1–3 related tasks per runner batch**; each task still has its own TDD cycle
   and atomic commit.
-- **max 2 concurrent write-capable runners** by default.
-- **no nested subagents** from a Polis task runner.
+- **max 2 concurrent write-capable runners by Polis policy**.
+- **no nested subagents**: the Codex `polis-task-runner` disables its own
+  multi-agent tools.
 - **bounded waiting:** one wait for a wave, useful coordinator work, then at most
   one later wait — never tight polling loops.
 - **risk-based review:** one combined batch review for low/medium risk; stronger
@@ -125,10 +126,12 @@ Codex invocation uses `$`, for example `$polis-init`, `$polis-plan`,
 }
 ```
 
-For Codex, Polis also installs a custom `polis-task-runner` configured for
-`gpt-5.6-luna` at medium reasoning, with runtime concurrency capped at two
-spawned threads. The main orchestrator remains free to use a stronger model for
-architecture, ambiguity, or high-risk judgment.
+For Codex, Polis installs a custom `polis-task-runner` configured for
+`gpt-5.6-luna` at medium reasoning. That runner disables multi-agent tools, so a
+Polis child cannot create grandchildren. Polis itself keeps write concurrency at
+two by workflow policy without overwriting the user's global Codex agent limit.
+The main orchestrator remains free to use a stronger model for architecture,
+ambiguity, or high-risk judgment.
 
 ## Execution example
 

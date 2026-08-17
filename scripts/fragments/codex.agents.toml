@@ -1,13 +1,10 @@
 # ============================================================================
-# Polis :: Codex multi-agent guardrails
+# Polis :: Codex custom runner declaration
 # ============================================================================
-# Current Codex configuration uses [agents] for multi-agent controls and role
-# declarations. Keep Polis concurrency deliberately small: write-heavy agent
-# workflows trade extra tokens for isolation/parallelism, so fan-out is bounded.
-
-[agents]
-max_concurrent_threads_per_session = 2
-interrupt_message = false
+# Do not write global [agents] scalar settings here: Polis may be installed into
+# a config that already has user-owned multi-agent settings. Concurrency is
+# bounded by Polis execution policy; the runner itself disables nested agents in
+# its custom config file.
 
 [agents.polis-task-runner]
 description = "Token-efficient Polis implementation runner. Executes one bounded batch (1-3 related tasks), TDD + one atomic commit per task, no nested subagents."

@@ -46,7 +46,8 @@ Do **not** manufacture a failing unit test merely because a task includes:
 - imports/exports or dependency wiring;
 - formatting/renaming with no behavior change;
 - configuration changes best validated by config/schema parsing;
-- migrations whose correctness is better proven by migration/schema checks;
+- purely structural migrations whose correctness is fully described by schema
+  shape (for example adding an unused nullable column or index);
 - build/tooling changes best validated by build/type/lint commands;
 - glue code already exercised by the owning integration/behavior test.
 
@@ -54,17 +55,38 @@ Use the strongest cheap deterministic evidence instead: existing targeted tests,
 typecheck, lint, build, schema/migration validation, contract tests, or a focused
 integration check.
 
+### Migration boundary — structural vs behavioral
+
+Do not classify every migration as mechanical. Decide what can go wrong:
+
+- **Structural migration:** schema-only shape with no intended change to existing
+  data meaning or runtime behavior (for example an index, or a nullable column
+  that is not yet consumed). Migration/schema validation may be sufficient.
+- **Behavioral/data migration:** backfills, data transformations, changed
+  defaults affecting existing rows, new/changed constraints with semantic impact,
+  permission/RLS changes, destructive operations, or anything that changes how
+  existing data is interpreted or accessed. This requires automated behavioral,
+  regression, or integration evidence appropriate to the risk, and RED → GREEN
+  when the changed behavior can be expressed as a test.
+
+When uncertain, treat the migration as behavioral/high-risk rather than using
+"mechanical" as an escape hatch.
+
 ## The behavior cycle
 
 For a behavior that needs TDD:
 
 1. **RED** — write or extend the test that expresses the missing/changed behavior.
-2. Run the **targeted** test and confirm it fails for the intended reason.
-3. **GREEN** — implement the complete coherent behavior, including the related
+2. Run the **targeted** test and confirm it fails for the intended reason **before
+   changing production code**.
+3. **RED is valid only when observed.** Seeing the expected failure is evidence
+   that the test exercises the missing behavior. A test that was not run, passes
+   immediately, or fails for an unrelated reason is not a valid RED.
+4. **GREEN** — implement the complete coherent behavior, including the related
    files needed to make that slice work.
-4. Run the targeted evidence until green.
-5. **REFACTOR** — clean the implementation while keeping evidence green.
-6. Commit the coherent task.
+5. Run the targeted evidence until green.
+6. **REFACTOR** — clean the implementation while keeping evidence green.
+7. Commit the coherent task.
 
 Do not restart RED/GREEN merely because implementation touched another file in
 the same capability.
@@ -78,8 +100,9 @@ layer unless the layers represent independent contracts or risk boundaries.
 ## High-risk boundaries
 
 Auth, authorization, payments/billing, security, privacy, destructive data
-operations, and critical migrations justify stronger automated evidence. Even
-there, optimize for **coverage of risk**, not raw test count.
+operations, behavioral/data migrations, and critical schema changes justify
+stronger automated evidence. Even there, optimize for **coverage of risk**, not
+raw test count.
 
 ## Framework-adaptive
 

@@ -15,9 +15,11 @@ Cost and orchestration boundaries:
 For each task, sequentially:
 1. Identify the behavior/capability and its cheapest strong evidence.
 2. If observable behavior changes, use RED -> GREEN -> REFACTOR at that behavior boundary. Reuse or extend an existing owning test when possible; do not create tests per touched file or implementation step.
-3. If the change is mechanical/non-behavioral, do not manufacture RED. Validate with the strongest relevant deterministic check: existing tests, typecheck, lint, build, schema/migration/config parsing, or focused integration evidence.
-4. Implement the complete coherent slice, not a sequence of artificial microsteps.
-5. Commit atomically as [polis] T<n>: <what>.
+3. For behavior changes, RED is valid only if you actually run the targeted test and observe it fail for the intended missing/changed behavior before changing production code. A test that was not run, passes immediately, or fails for an unrelated reason is not a valid RED.
+4. If the change is mechanical/non-behavioral, do not manufacture RED. Validate with the strongest relevant deterministic check: existing tests, typecheck, lint, build, schema/config parsing, or focused integration evidence.
+5. Treat migrations carefully: schema-only structural migrations may use migration/schema validation; backfills, data transformations, changed defaults affecting existing rows, semantic constraints, permission/RLS changes, or destructive migrations require automated behavioral/regression/integration evidence and should be treated as high-risk when uncertain.
+6. Implement the complete coherent slice, not a sequence of artificial microsteps.
+7. Commit atomically as [polis] T<n>: <what>.
 
 Verification:
 - Run targeted evidence while implementing.

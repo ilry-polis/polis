@@ -1,75 +1,31 @@
 #!/usr/bin/env bash
-# ============================================================================
 # Polis :: convert-runtime.sh
-# ----------------------------------------------------------------------------
-# Converts Polis from its CANONICAL form (Claude Code: markdown + YAML
-# frontmatter + hooks.json) into the layout a target runtime expects.
-#
-# Canonical source is authored once. This script performs the per-runtime
-# transformations:
-#   - command slug -> invocation prefix  (/polis:cmd | $polis-cmd)
-#   - hook events  -> per-runtime event names / schema
-#   - paths        -> per-runtime directories
-#   - placeholders -> per-runtime plugin-root variable
-#
-# It is invoked by install.sh, but is runnable standalone for inspection:
-#   bash scripts/convert-runtime.sh --runtime codex  --src . --out /tmp/out
-#   bash scripts/convert-runtime.sh --runtime cursor --src . --out /tmp/out
-#
-# It NEVER writes outside --out. It does not touch the user's real config; that
-# wiring (appending TOML, registering hooks) is install.sh's job.
-# ============================================================================
-
+# Convert canonical Polis sources into runtime-specific layouts.
 set -euo pipefail
 
-RUNTIME=""
-SRC="."
-OUT=""
-
-usage() {
-  cat <<'USAGE'
-convert-runtime.sh --runtime <codex|cursor|claude> --src <dir> --out <dir>
-
-  --runtime  target runtime (claude is a passthrough copy)
-  --src      canonical Polis source directory (default: .)
-  --out      output directory to write the converted layout into
-USAGE
-}
-
+RUNTIME=""; SRC="."; OUT=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --runtime) RUNTIME="${2:-}"; shift 2;;
     --src) SRC="${2:-}"; shift 2;;
     --out) OUT="${2:-}"; shift 2;;
-    -h|--help) usage; exit 0;;
-    *) echo "convert-runtime: unknown arg: $1" >&2; usage; exit 2;;
+    -h|--help) echo "convert-runtime.sh --runtime <codex|cursor|claude> --src <dir> --out <dir>"; exit 0;;
+    *) echo "convert-runtime: unknown arg: $1" >&2; exit 2;;
   esac
 done
-
 [ -n "$RUNTIME" ] || { echo "convert-runtime: --runtime required" >&2; exit 2; }
 [ -n "$OUT" ] || { echo "convert-runtime: --out required" >&2; exit 2; }
 [ -d "$SRC" ] || { echo "convert-runtime: --src not a directory: $SRC" >&2; exit 2; }
-
 mkdir -p "$OUT"
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-# Extract the YAML frontmatter description from a command markdown file.
 fm_description() {
   awk '
     NR==1 && $0=="---" { infm=1; next }
     infm && $0=="---" { exit }
-    infm && /^description:/ {
-      sub(/^description:[[:space:]]*/, "")
-      print
-      exit
-    }
+    infm && /^description:/ { sub(/^description:[[:space:]]*/, ""); print; exit }
   ' "$1"
 }
 
-# Strip the YAML frontmatter, returning just the body of a markdown file.
 strip_frontmatter() {
   awk '
     NR==1 && $0=="---" { infm=1; next }
@@ -78,9 +34,6 @@ strip_frontmatter() {
   ' "$1"
 }
 
-# Strip frontmatter AND the first H1 heading (and the blank line after it), so a
-# converted file can supply its own retitled heading without duplicating the
-# original. Used for command-body inclusion in Codex/Cursor outputs.
 strip_frontmatter_and_h1() {
   strip_frontmatter "$1" | awk '
     !done && /^# / { done=1; skipblank=1; next }
@@ -89,81 +42,88 @@ strip_frontmatter_and_h1() {
   '
 }
 
-# ---------------------------------------------------------------------------
-# CLAUDE: passthrough. The canonical form IS the Claude Code form.
-# ---------------------------------------------------------------------------
+# Main workflow entrypoints should stay tiny in Codex. The heavy methodology
+# lives in one canonical internal skill, avoiding two full instruction payloads.
+command_target_skill() {
+  case "$1" in
+    discuss) echo "brainstorming";;
+    roadmap) echo "roadmapping";;
+    spec) echo "writing-specs";;
+    plan) echo "writing-plans";;
+    exec) echo "executing-plans";;
+    review) echo "code-review";;
+    verify) echo "finishing-work";;
+    *) echo "";;
+  esac
+}
+
 convert_claude() {
   cp -R "$SRC/." "$OUT/"
   echo "[convert] claude: copied canonical layout to $OUT"
 }
 
-# ---------------------------------------------------------------------------
-# CODEX:
-#   - skills        -> .agents/skills/<name>/SKILL.md  (copied as-is)
-#   - commands      -> .agents/commands/polis-<name>.md, invoked as $polis-<name>
-#   - hooks/agents  -> TOML fragments (emitted to OUT/codex-config-fragments/)
-#   - instructions  -> AGENTS.md (copied)
-# ---------------------------------------------------------------------------
 convert_codex() {
-  mkdir -p "$OUT/.agents/skills" "$OUT/.agents/commands" "$OUT/codex-config-fragments" "$OUT/hooks"
+  mkdir -p "$OUT/.agents/skills" "$OUT/codex-config-fragments"
 
-  # Skills: same SKILL.md format, different directory.
+  # Canonical internal skills: one copy inside the plugin package.
   if [ -d "$SRC/skills" ]; then
     cp -R "$SRC/skills/." "$OUT/.agents/skills/"
   fi
 
-  # Commands: rewrite the invocation hint to the $ prefix and rename slug.
+  # Codex explicit commands are skills invoked with $name. Generate exactly one
+  # explicit-only polis-* skill per canonical command. Do NOT emit .agents/commands.
   if [ -d "$SRC/commands" ]; then
     for f in "$SRC/commands"/*.md; do
       [ -e "$f" ] || continue
       base="$(basename "$f" .md)"
+      name="polis-${base}"
       desc="$(fm_description "$f")"
+      dir="$OUT/.agents/skills/$name"
+      mkdir -p "$dir/agents"
+
+      target="$(command_target_skill "$base")"
       {
-        echo "# \$polis-${base}"
+        echo "---"
+        echo "name: $name"
+        echo "description: >-"
+        echo "  Explicit Polis entrypoint: $base. Use only when the user invokes \$$name."
+        echo "---"
         echo
-        echo "> ${desc}"
+        echo "# \$$name"
         echo
-        echo "> Codex invocation: \`\$polis-${base}\`"
-        echo
-        strip_frontmatter_and_h1 "$f"
-      } > "$OUT/.agents/commands/polis-${base}.md"
+        if [ -n "$target" ]; then
+          echo "This is a thin explicit entrypoint. Read and follow the canonical \`$target\` skill for this phase."
+          echo "Use the user's text after \`\$$name\` as the target/arguments. Do not duplicate or restate the canonical skill before applying it."
+        else
+          # Support commands have no separate methodology skill; keep their
+          # canonical command body here, rewriting Polis command syntax for Codex.
+          strip_frontmatter_and_h1 "$f" | sed -E 's#/polis:([a-z-]+)#\$polis-\1#g'
+        fi
+      } > "$dir/SKILL.md"
+
+      cat > "$dir/agents/openai.yaml" <<'YAML'
+policy:
+  allow_implicit_invocation: false
+YAML
     done
   fi
 
-  # Hooks: ship the scripts and the TOML fragments (root placeholder intact;
-  # install.sh substitutes {POLIS_ROOT} when it appends to the real config).
-  cp -R "$SRC/hooks/." "$OUT/hooks/"
-  if [ -f "$SRC/scripts/fragments/codex.hooks.toml" ]; then
-    cp "$SRC/scripts/fragments/codex.hooks.toml" "$OUT/codex-config-fragments/"
-  fi
+  # Codex 0.5.1+ uses native context telemetry, so no Polis hook scripts or hook
+  # fragments are emitted for Codex. Only custom agent configuration remains.
   if [ -f "$SRC/scripts/fragments/codex.agents.toml" ]; then
     cp "$SRC/scripts/fragments/codex.agents.toml" "$OUT/codex-config-fragments/"
   fi
 
-  # Instructions.
   [ -f "$SRC/AGENTS.md" ] && cp "$SRC/AGENTS.md" "$OUT/AGENTS.md"
-  [ -f "$SRC/references" ] || true
   [ -d "$SRC/references" ] && cp -R "$SRC/references" "$OUT/references"
 
-  echo "[convert] codex: skills -> .agents/skills, commands -> \$polis-<name>, hooks + TOML fragments emitted"
+  echo "[convert] codex: internal skills + explicit-only \$polis-* skills; no .agents/commands; no Polis hooks"
 }
 
-# ---------------------------------------------------------------------------
-# CURSOR:
-#   - skills        -> skills/<name>/SKILL.md  (copied as-is)
-#   - commands      -> .cursor/rules/polis-<name>.mdc, invoked as /polis:<name>
-#   - hooks         -> .cursor/hooks.json (from canonical hooks-cursor.json)
-#   - instructions  -> AGENTS.md (copied)
-# ---------------------------------------------------------------------------
 convert_cursor() {
   mkdir -p "$OUT/skills" "$OUT/.cursor/rules" "$OUT/.cursor" "$OUT/hooks"
+  [ -d "$SRC/skills" ] && cp -R "$SRC/skills/." "$OUT/skills/"
 
-  if [ -d "$SRC/skills" ]; then
-    cp -R "$SRC/skills/." "$OUT/skills/"
-  fi
-
-  # Commands -> .mdc rules. .mdc files use YAML frontmatter too; we emit a
-  # rule that documents the /polis:<name> command and carries its body.
   if [ -d "$SRC/commands" ]; then
     for f in "$SRC/commands"/*.md; do
       [ -e "$f" ] || continue
@@ -177,23 +137,16 @@ convert_cursor() {
         echo
         echo "# /polis:${base}"
         echo
-        echo "> Cursor invocation: \`/polis:${base}\`"
-        echo
         strip_frontmatter_and_h1 "$f"
       } > "$OUT/.cursor/rules/polis-${base}.mdc"
     done
   fi
 
-  # Hooks: the canonical Cursor mapping becomes .cursor/hooks.json.
   cp -R "$SRC/hooks/." "$OUT/hooks/"
-  if [ -f "$SRC/hooks/hooks-cursor.json" ]; then
-    cp "$SRC/hooks/hooks-cursor.json" "$OUT/.cursor/hooks.json"
-  fi
-
+  [ -f "$SRC/hooks/hooks-cursor.json" ] && cp "$SRC/hooks/hooks-cursor.json" "$OUT/.cursor/hooks.json"
   [ -f "$SRC/AGENTS.md" ] && cp "$SRC/AGENTS.md" "$OUT/AGENTS.md"
   [ -d "$SRC/references" ] && cp -R "$SRC/references" "$OUT/references"
-
-  echo "[convert] cursor: skills -> skills/, commands -> .cursor/rules/*.mdc (/polis:<name>), hooks -> .cursor/hooks.json"
+  echo "[convert] cursor: skills + /polis rules + Cursor hooks"
 }
 
 case "$RUNTIME" in

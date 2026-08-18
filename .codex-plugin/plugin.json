@@ -1,8 +1,8 @@
 {
   "name": "polis",
-  "version": "0.5.0",
-  "description": "Spec-driven development + token-efficient bounded subagent orchestration for Codex CLI.",
+  "version": "0.5.1",
+  "description": "Spec-driven development + token-efficient bounded orchestration for Codex CLI, relying on Codex-native context telemetry.",
   "license": "MIT",
   "skills": "./.agents/skills",
-  "//": "Codex plugin manifest. Skills are discovered under .agents/skills/. scripts/install.sh applies marker-bounded Codex hook and agent config fragments."
+  "//": "Codex plugin manifest. One canonical .agents/skills tree contains internal methodology skills plus explicit-only $polis-* entrypoint skills. The installer removes legacy duplicate global wrappers and installs only the Polis runner declaration; context telemetry stays native via /statusline and /status."
 }

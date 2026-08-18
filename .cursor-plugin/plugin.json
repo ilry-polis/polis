@@ -1,7 +1,7 @@
 {
   "name": "polis",
-  "version": "0.5.0",
-  "description": "Spec-driven development + token-efficient bounded subagent orchestration for Cursor.",
+  "version": "0.5.1",
+  "description": "Spec-driven development + token-efficient bounded orchestration for Cursor.",
   "license": "MIT",
   "//": "Cursor descriptor metadata. Runtime surface: .cursor/hooks.json, .cursor/rules/*.mdc, and AGENTS.md emitted by the installer.",
   "hooks_file": ".cursor/hooks.json",

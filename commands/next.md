@@ -1,37 +1,37 @@
 ---
-description: Detect the single best next action from the current state — phase, progress, context budget, and any pending pause. Routes you to the right command instead of making you decide. Read-only; it proposes, you decide.
+description: Detect the single best next Polis workflow action from durable state. Read-only; it proposes, the user decides. Codex context is observed through native /statusline or /status rather than a Polis threshold monitor.
 argument-hint: ""
 ---
 
 # /polis:next
 
-Look at where things stand and propose the one most sensible next move. Useful
-when you're returning to a project and aren't sure what's next, or just want the
-system's recommendation.
+Look at durable project state and propose the one most sensible next move.
 
 ## How it decides
 
-Read the state and route by priority (first match wins):
+Read STATE.md, roadmap/spec/plan state, and git. Route by priority:
 
 1. **Pending pause** — STATE.md has a `Stopped At` breadcrumb → `/polis:resume-work`.
-2. **Context HIGH/CRITICAL** — the monitor reads past 65% →
-   finish + commit the current task, then `/polis:pause-work`.
+2. **Repository hazard** — merge/rebase/conflicts/unexpected drift → surface it before workflow progress.
 3. **By phase:**
-   - no design yet for the active feature → `/polis:discuss`
-   - new project: design + ID'd requirements approved, no roadmap yet →
-     `/polis:roadmap`
+   - no design yet for active feature → `/polis:discuss`
+   - new project: design + ID'd requirements approved, no roadmap → `/polis:roadmap`
    - roadmap exists, current phase not specced → `/polis:spec <phase>`
-   - design approved (single feature), no spec → `/polis:spec`
+   - design approved, no spec → `/polis:spec`
    - spec approved, no plan → `/polis:plan`
-   - plan approved, tasks remaining → `/polis:exec` (name the next task)
+   - plan approved, tasks remaining → `/polis:exec` (name next coarse task)
    - all tasks done, phase not verified → `/polis:verify`
-   - phase verified, more phases in roadmap → `/polis:spec` the next phase
-   - verified, no more phases → propose the next milestone
+   - phase verified, more roadmap phases → `/polis:spec <next-phase>`
+   - verified, no more phases → propose next milestone
 4. **Uninitialized** — no `.claude/polis/` → `/polis:init`.
+
+## Context
+
+Do not route based on Polis WARNING/HIGH/CRITICAL thresholds.
+
+- On **Codex**, context remaining/used/window size is native TUI information (`/statusline` or `/status`). If the user sees context getting low, recommend checkpoint/compact/resume based on that native signal and current task safety.
+- On other runtimes, use native context information when available; otherwise do not invent precision.
 
 ## Output
 
-State the current situation in one line, then the recommended next action and
-why, in one more. If a couple of moves are reasonable, name the top one and
-mention the alternative. It proposes; the user decides — don't execute the next
-action automatically.
+State current situation in one line, then the recommended next action and why in one more. It proposes; do not execute the next phase automatically.

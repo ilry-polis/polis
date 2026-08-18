@@ -1,7 +1,7 @@
 {
   "name": "polis",
-  "version": "0.5.0",
-  "description": "Spec-driven development + token-efficient bounded subagent orchestration for Claude Code.",
+  "version": "0.5.1",
+  "description": "Spec-driven development + token-efficient bounded orchestration for Claude Code.",
   "license": "MIT",
   "keywords": ["context-engineering", "spec-driven-development", "tdd", "subagents", "workflow"]
 }

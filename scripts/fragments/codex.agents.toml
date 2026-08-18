@@ -1,11 +1,10 @@
 # ============================================================================
 # Polis :: Codex custom runner declaration
 # ============================================================================
-# Do not write global [agents] scalar settings here: Polis may be installed into
+# Do not write global [agents] scalar settings here. Polis may be installed into
 # a config that already has user-owned multi-agent settings. Concurrency is
-# bounded by Polis execution policy; the runner itself disables nested agents in
-# its custom config file.
+# bounded by Polis execution policy; the runner disables nested agents itself.
 
 [agents.polis-task-runner]
-description = "Token-efficient Polis implementation runner. Executes one bounded batch (1-3 related tasks), TDD + one atomic commit per task, no nested subagents."
+description = "Token-efficient Polis implementation runner. Executes one coarse task or at most two closely related tasks, behavior-focused verification + atomic commits, no nested subagents."
 config_file = "{POLIS_ROOT}/references/polis-task-runner.toml"

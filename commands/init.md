@@ -36,7 +36,7 @@ Set up Polis in this repository.
     "tddMandatory": true
   },
   "orchestration": {
-    "maxTasksPerBatch": 3,
+    "maxTasksPerBatch": 2,
     "maxConcurrentAgents": 2,
     "maxWaitCyclesPerWave": 2,
     "reviewMode": "risk-based",
@@ -45,8 +45,9 @@ Set up Polis in this repository.
 }
 ```
 
-These defaults intentionally cap coordination fan-out. They preserve TDD and
-atomic commits while avoiding one-subagent-per-microtask behavior.
+Planning defaults are intentionally coarse: approximately **3–7 coherent
+capability tasks per feature phase**, not 2–5 minute microtasks. Execution may
+batch at most two closely related tasks when reuse of local context is valuable.
 
 4. Seed `STATE.md` with current milestone, phase, progress, HEAD, timestamp,
    decisions, notes, and stopped-at breadcrumb.

@@ -1,102 +1,94 @@
 ---
 name: tdd
-description: Use during all code execution. Activates automatically whenever production code is being written in a task. Enforces the RED -> GREEN -> REFACTOR cycle without exception: failing test first, confirm it fails for the right reason, minimal code to pass, refactor green. If production code is written before its test, delete it and restart the cycle. Adapts to the project's detected test framework.
+description: Use during code execution for behavior changes. Enforces RED -> GREEN -> REFACTOR at the capability/behavior boundary, without manufacturing redundant tests for mechanical edits. Reuse or extend existing tests when they already own the behavior; use deterministic non-test checks for non-behavioral changes.
 ---
 
 # Test-Driven Development
 
-In Polis, TDD is not a style preference — it's the law of execution. Tests come
-first, always. The reason is simple: a test written after the code tends to
-confirm what the code already does, including its bugs. A test written first
-defines what the code *should* do, independent of how it ends up doing it.
+Polis uses TDD to prove behavior, not to maximize test count. The unit of TDD is
+a **behavior or capability**, not a file edit, helper, type, config line, or
+implementation step.
 
-## The cycle — RED → GREEN → REFACTOR
+## When RED -> GREEN -> REFACTOR is required
 
-For every unit of behavior:
+Use a real RED → GREEN → REFACTOR cycle when a task introduces or changes
+observable behavior, including:
 
-1. **RED — write a failing test.** Write the test for the behavior you're about
-   to implement. Just the test.
-2. **Confirm it fails for the right reason.** Run it. It must fail — and fail
-   because the behavior is missing, not because of a typo, a bad import, or a
-   broken harness. A test that passes immediately, or fails for the wrong
-   reason, is not a valid RED.
-3. **GREEN — minimal code to pass.** Write the least code that makes the test
-   pass. Not the elegant version, not the general version — the minimal one.
-   Resist building ahead of the test.
-4. **Confirm it passes.** Run the test. Green.
-5. **REFACTOR — clean up, stay green.** Improve names, remove duplication,
-   tidy structure. Re-run after each change; the test stays green throughout.
-6. **Commit.** The task's atomic commit happens here, with the test and code
-   together.
+- business/domain rules;
+- API contracts and validation behavior;
+- user-visible interactions;
+- authorization/security decisions;
+- state transitions;
+- bug fixes where a regression test can reproduce the failure;
+- data transformations whose correctness is behavioral.
 
-## The hard rule
+For one coherent capability, prefer the **smallest useful set of tests** that
+proves the behavior. Do not create one test per touched file or implementation
+step.
 
-**If production code gets written before its test, delete it and start the
-cycle properly.** This feels wasteful the first time and isn't — the deleted
-code was written without a definition of done, and re-deriving it test-first
-almost always produces something cleaner. No exceptions, no "I'll add the test
-after."
+## Reuse before adding
 
-## Right reason matters
+Before writing a new test:
 
-Step 2 is the one people skip, and it's load-bearing. Watching the test fail for
-the *correct* reason proves the test actually exercises the behavior. A test
-that would pass even with the feature removed is testing nothing. Confirm the
-failure mode is the absence of the behavior, then proceed.
+1. Find the test that already owns this behavior or boundary.
+2. Extend it if that gives clear coverage without making it brittle.
+3. Add a new test only when it represents a distinct behavior, regression, edge
+   case, or risk that the existing suite cannot express cleanly.
 
-## One assertion per test
+A test suite that proves the contract with 4 tests is better than one that proves
+the same thing with 20 near-duplicates.
 
-A test checks one behavior. If the test name needs an "and" — `test_saves_and_emails`
-— it's two tests; split it. When a single-behavior test fails, you know exactly
-what broke. When a five-assertion test fails, you go hunting.
+## Mechanical changes do not require artificial RED
 
-## The rationalizations — and why each is wrong
+Do **not** manufacture a failing unit test merely because a task includes:
 
-TDD discipline doesn't break by decision; it breaks by excuse. These are the
-excuses, named, so you recognize them as they form — each one is the sound of the
-discipline slipping:
+- types/interfaces generated or aligned to an existing contract;
+- imports/exports or dependency wiring;
+- formatting/renaming with no behavior change;
+- configuration changes best validated by config/schema parsing;
+- migrations whose correctness is better proven by migration/schema checks;
+- build/tooling changes best validated by build/type/lint commands;
+- glue code already exercised by the owning integration/behavior test.
 
-- *"This is too simple to test."* Simple code breaks too, and the test costs
-  seconds. If it's truly trivial, the test is trivial — write it.
-- *"I'll add the test after."* After means never, or a test shaped to fit the
-  code's bugs. The test goes first because it defines correct independently.
-- *"I already wrote the code, deleting it is wasteful."* Sunk cost. The code was
-  written without a definition of done; re-deriving it test-first is usually
-  cleaner, not slower.
-- *"TDD is dogmatic / slows me down."* The slowdown is the thinking you were
-  skipping. Test-first surfaces edge cases now instead of in production.
-- *"I know it works, I can see it."* Then the test passes immediately and costs
-  nothing. If you can't be bothered to prove it, you don't know it.
-- *"The test is hard to write."* That's the design talking, not the test. Hard-to-
-  test usually means too-coupled — fix the design (see references/tdd-anti-patterns.md).
+Use the strongest cheap deterministic evidence instead: existing targeted tests,
+typecheck, lint, build, schema/migration validation, contract tests, or a focused
+integration check.
 
-If you hear yourself thinking one of these, that's the signal to follow the
-cycle, not abandon it.
+## The behavior cycle
 
-## Red flags — stop and restart the cycle
+For a behavior that needs TDD:
 
-Any of these means you've left TDD and need to reset to RED:
+1. **RED** — write or extend the test that expresses the missing/changed behavior.
+2. Run the **targeted** test and confirm it fails for the intended reason.
+3. **GREEN** — implement the complete coherent behavior, including the related
+   files needed to make that slice work.
+4. Run the targeted evidence until green.
+5. **REFACTOR** — clean the implementation while keeping evidence green.
+6. Commit the coherent task.
 
-- Production code exists with no failing test behind it.
-- A new test passes the moment you write it (you're testing existing behavior).
-- You can't explain *why* the RED test failed.
-- You're reaching for any rationalization above.
+Do not restart RED/GREEN merely because implementation touched another file in
+the same capability.
 
-The reset is the same every time: delete the untested code, write the failing
-test, watch it fail for the right reason, then proceed. Restarting feels like
-losing ground; it's the opposite — it's getting back onto the only path that
-ends in verified code.
+## Bug fixes
+
+For a reproducible bug, prefer one regression test that fails before the fix and
+passes after it. Do not add multiple tests that restate the same failure at every
+layer unless the layers represent independent contracts or risk boundaries.
+
+## High-risk boundaries
+
+Auth, authorization, payments/billing, security, privacy, destructive data
+operations, and critical migrations justify stronger automated evidence. Even
+there, optimize for **coverage of risk**, not raw test count.
 
 ## Framework-adaptive
 
-Use whatever test framework the project already uses — detected by
-skills/project-detect (pytest, vitest/jest, go test, cargo test, rspec, etc.).
-Match the project's existing test conventions: file locations, naming, assertion
-style. Don't introduce a new framework mid-project to suit a preference.
+Use the project's existing test framework and conventions. Do not introduce a
+new framework simply to satisfy Polis. Test behavior rather than implementation
+structure, avoid over-mocking, and keep tests stable under refactoring.
 
-## Avoid the anti-patterns
+## Principle
 
-Test behavior, not implementation. Avoid fragile tests, over-mocking, and tests
-that simply mirror the code's structure. The full list and the reasoning behind
-each is in references/tdd-anti-patterns.md — consult it when a test feels hard
-to write, because difficulty is often a design smell, not a testing problem.
+**No unproven behavior, no redundant ceremony.** If behavior changes, prove it.
+If behavior does not change, validate the actual failure mode of the mechanical
+change instead of inventing a test that adds no information.

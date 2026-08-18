@@ -1,99 +1,97 @@
 ---
 name: writing-plans
-description: Use after a spec is approved and before execution. Breaks the spec into coherent, atomic implementation tasks with exact file paths, test-first verification, dependencies, risk, execution-batch hints, and an unambiguous done criterion. Avoids microtasks that create unnecessary orchestration overhead. Activates on /polis:plan.
+description: Use after a spec is approved and before execution. Produces a coarse execution plan made of a few coherent capability slices, with exact scope, verification strategy, dependencies, risk, and done criteria. Explicitly avoids file-by-file or microstep task explosion. Activates on /polis:plan.
 ---
 
 # Writing Plans
 
-A plan turns an approved spec into a sequence of meaningful, verifiable changes.
-If the spec is the contract, the plan is the build sheet. The goal is not the
-largest possible task count; it is the smallest set of coherent tasks that can
-be implemented, tested, reviewed, and reverted safely.
+A plan is a map of meaningful implementation slices, not a transcript of every
+edit the agent expects to make. The spec already contains detail; the plan should
+turn that detail into the **smallest useful set of execution units**.
 
-## The atomic task
+## Default granularity
 
-A task is **one coherent implementation unit**, not a 2–5 minute microstep. It
-should complete one TDD cycle and end in one reversible commit without mixing
-unrelated concerns.
+Prefer **3–7 tasks per feature phase**. A task should usually represent a coherent
+capability, vertical slice, or technical boundary that can be implemented and
+verified as one unit.
 
-Good task boundaries usually combine the test and implementation needed for one
-behavior. Do **not** create separate tasks for "add test", "add type", "wire
-handler", and "update call site" when those edits are one behavior and must land
-together.
+Do not create separate tasks for things that naturally belong together, such as:
 
-As a default, prefer roughly **5–12 meaningful tasks per feature phase**. If a
-plan wants materially more than that, first try to merge artificial microtasks;
-if the work is genuinely that large, split the feature into another phase or
-plan. Task count is a coordination cost.
+- add type + repository method + service wiring for the same behavior;
+- create migration + update generated/domain types for the same schema change;
+- add endpoint + validation + handler + its focused tests;
+- add component + state + API integration for one screen behavior;
+- write test / write implementation / refactor as separate plan tasks.
 
-Every task carries:
+Those are **steps inside one task**, not tasks themselves.
 
-1. **ID** — sequential and unique (T1, T2, ...). Referenced by dependencies and
-   commits.
-2. **Description** — precisely what behavior to implement. No hand-waving.
-3. **File paths** — the exact files expected to change. Not "the auth module" —
-   `src/auth/session.ts`.
-4. **Expected code or pseudo-code** — enough to constrain the approach without
-   narrating the whole implementation.
-5. **Test first** — the test that proves the behavior, written before production
-   code. This is the RED of the TDD cycle (see skills/tdd).
-6. **Dependencies** — which tasks must complete first.
-7. **Risk** — `low`, `medium`, or `high`. Auth, permissions, billing/payments,
-   destructive data changes, security boundaries, and migrations default high.
-8. **Execution batch** — a suggested batch ID (B1, B2, ...). Put 1–3 related
-   tasks in one batch when they share a bounded area and can be executed by one
-   fresh-context runner without ambiguity. Keep conflicting or unrelated tasks
-   separate.
-9. **Done criterion** — unambiguous evidence: targeted test green plus any spec
-   acceptance criterion satisfied by the task.
+If a plan wants more than ~7 tasks, first merge artificial boundaries. If the
+work is genuinely broader, split the feature into another phase/milestone rather
+than producing 20–30 tiny tasks.
 
-## Batch design
+## The task
 
-Execution batches are a cost-control boundary, not a reason to weaken atomicity:
+Every task carries only what execution needs:
 
-- A batch may contain **1–3 related tasks**.
-- Each task still gets its own TDD cycle and atomic commit.
-- Prefer sequential tasks in the same subsystem when one runner can retain useful
-  local context across them.
-- Parallel batches must be genuinely independent. Avoid parallel write-heavy
-  batches that touch the same files or integration seam.
-- A high-risk task should normally be its own batch.
+1. **ID + outcome** — what capability is true when this task is done.
+2. **Scope** — primary files/modules expected to change. Exact paths when known,
+   but do not enumerate every incidental import or generated file.
+3. **Implementation constraints** — architecture/contracts that must be obeyed;
+   enough to prevent invention, not line-by-line pseudo-code.
+4. **Verification strategy** — the smallest evidence that proves the task:
+   targeted behavior tests, an existing suite, type/lint/build checks, migration
+   validation, or manual/runtime evidence as appropriate.
+5. **Dependencies** — only real ordering constraints.
+6. **Risk** — `low`, `medium`, or `high`. Auth, permissions, billing/payments,
+   security, privacy, destructive data work, and migrations default high.
+7. **Done criterion** — observable acceptance evidence tied back to the spec.
 
-This lets execution reuse one fresh context for a few related commits instead of
-paying the spawn / handoff / wait / review overhead for every microstep.
+## Testing granularity
 
-## The quality loop
+Plan **tests for behavior, not for edits**. Do not invent one new test for every
+file touched, helper introduced, wiring change, or implementation step.
 
-Don't write a plan once and ship it. Loop:
+- New/changed behavior should have focused automated coverage where practical.
+- Several assertions may belong to one behavior-level test when they prove one
+  outcome.
+- Docs, comments, formatting, generated artifacts, purely mechanical renames,
+  and configuration-only changes do not require fabricated RED tests; verify
+  them with the appropriate deterministic check instead.
+- Prefer extending an existing test that already owns the behavior over creating
+  a redundant new test file.
 
-**research → plan → verify → adjust**, until the plan passes its own review:
+TDD still governs behavior-changing production code (see skills/tdd); the plan
+simply stops turning the TDD cycle itself into multiple orchestration tasks.
 
-- **research:** inspect the actual codebase. What exists? What conventions?
-  What will each task really touch? A plan written without reading the code is
-  fiction.
-- **plan:** draft the smallest coherent task set and batches.
-- **verify:** check the plan against the spec. Every acceptance criterion maps to
-  at least one task; no task contradicts the spec; nothing extra sneaks in.
-- **adjust:** merge artificial microtasks, split genuine oversized work, fix
-  dependency/risk labels, and re-verify.
+## Execution batches
 
-If the plan and spec diverge, **flag it to the user** — don't silently let the
-plan win.
+Because tasks are now coarse, batching should also be conservative:
 
-## Context-sized
+- Default: **one task per runner** when the task is substantial.
+- Up to **2 closely related low/medium-risk tasks** may share one runner when
+  doing so clearly reuses local context and they do not create an integration
+  seam.
+- High-risk tasks stay isolated.
+- Never batch unrelated work just to hit a number.
 
-Each batch must fit comfortably in a fresh subagent's context window *with room
-to work*. If a feature is too large, split it into multiple plans per milestone.
-The runner should receive task IDs, exact plan/spec anchors, and minimal
-surrounding context — never the chat transcript or whole project.
+The goal is fewer agent starts without recreating a giant all-purpose task.
 
-## Versioning & output
+## Quality loop
 
-Save as `.claude/polis/plans/plan-<feature>-v<n>.md`. New version on material
-change; the latest approved version is what `/polis:exec` runs.
+Use **research → plan → verify → adjust**:
 
-## Precise, not padded
+- inspect the actual codebase and existing tests;
+- draft 3–7 coherent slices;
+- map every acceptance criterion to at least one slice;
+- merge file-by-file or step-by-step microtasks;
+- split only when a task crosses unrelated responsibilities or cannot be safely
+  verified/reverted as one unit.
 
-A task list earns nothing from verbosity or task count. State each task in the
-fewest words that leave no ambiguity. A short, exact plan reduces both context
-load and orchestration turns during execution.
+If plan and spec diverge, flag it to the user. Do not silently let the plan win.
+
+## Output
+
+Save as `.claude/polis/plans/plan-<feature>-v<n>.md`. Keep it short enough that
+execution can understand the phase without re-reading a verbose implementation
+script. A good plan says **what coherent slice to deliver and how to prove it**;
+the runner decides the ordinary intermediate edits.

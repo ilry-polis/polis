@@ -1,68 +1,82 @@
 ---
 name: subagent-dispatch
-description: Use whenever delegating work to a subagent during execution. Defines what context to package (and what to withhold), how to brief a fresh-context subagent so it can act without the chat history, and how to review and integrate what it returns without polluting the orchestrator's window. Activates during /polis:exec and whenever heavy work should leave the orchestrator.
+description: Use when delegation materially helps execution. Packages bounded batches with minimal context, prevents nested delegation and polling churn, limits parallel write work, and integrates only concise outcomes.
 ---
 
 # Subagent Dispatch
 
-Subagents are how Polis keeps the orchestrator lean: the expensive work runs in
-a fresh window and only the conclusion comes back. Getting the handoff right is
-what makes that trade pay off. A badly briefed subagent guesses; a badly
-reviewed return pollutes the orchestrator. This skill covers both ends.
+Subagents trade tokens for isolation and parallelism. Use that trade only when it
+pays. A fresh context is valuable for bounded implementation, exploration, or
+high-risk isolation; it is wasteful when every tiny plan item becomes a new
+thread.
 
-## What to send (the briefing)
+## When to dispatch
 
-A subagent has **none** of your conversation history. Brief it as you would a
-competent contractor who just walked in:
+Dispatch when at least one is true:
 
-- **The task** — its full definition from the plan: ID, description, file paths,
-  expected code, the test, the done criterion.
-- **The relevant spec section** — only the part that governs this task, not the
-  whole spec.
-- **Minimal surrounding context** — the conventions, the adjacent interfaces it
-  must match, the location of things it'll touch. Enough to act correctly.
-- **The standard of done** — TDD required, atomic commit expected, what
-  "compliant + quality" means here.
+- the work is large/noisy enough to pollute the orchestrator;
+- 1–3 related tasks benefit from one fresh implementation context;
+- independent work has a real parallel speed benefit;
+- high-risk work benefits from isolation or independent scrutiny.
+
+Prefer direct execution for a trivial low-risk task when the main context is
+healthy and delegation would add more handoff/review/wait turns than work.
+
+## What to send
+
+A runner has no useful chat history. Brief it with **anchors and constraints**:
+
+- batch ID and 1–3 task IDs from the approved plan;
+- exact plan/spec file paths and relevant section names/anchors;
+- exact files or subsystem boundaries expected to change;
+- non-obvious conventions/constraints only;
+- required evidence and commit format.
+
+Tell the runner to read named repository files as needed instead of pasting large
+file contents into its prompt.
 
 ## What to withhold
 
-- The full chat transcript. The subagent doesn't need how you got here.
-- The whole codebase. Point it at what's relevant; let it read more if it must.
-- Other tasks' details, unless this task depends on them.
-- Your reasoning narrative. Give it the decision, not the deliberation.
+- full chat transcript;
+- whole spec/plan when only sections are relevant;
+- unrelated tasks;
+- raw output from earlier agents;
+- reasoning narratives and historical debugging logs;
+- broad codebase dumps the runner can retrieve itself.
 
-The discipline cuts both ways: sending too little makes it guess, sending too
-much defeats the purpose. The plan's per-task fields exist precisely so this
-briefing is mostly copy-paste, not re-derivation.
+## Runner contract
+
+- Execute only the assigned batch, sequentially.
+- Preserve one TDD cycle + one atomic commit per task.
+- **Never spawn or delegate to another subagent.** Depth stays 1.
+- Do not poll other agents or use agent-management tools.
+- Report: task IDs, done/blocked, commit hashes, tests/checks, one-to-two-line
+  summary, and only decisions/blockers the orchestrator must know.
+
+## Waiting policy
+
+Dispatch at most two write-capable runners concurrently by default. Then:
+
+1. wait once for the active set;
+2. if some are still active, perform useful coordinator work;
+3. wait at most once more later;
+4. do not loop on `wait`, `wait_agent`, `list_agents`, or equivalent status
+   checks.
+
+A status check is not progress. If results are not ready after the bounded wait
+policy, surface that state instead of turning polling into hundreds of model
+turns.
 
 ## Reviewing the return
 
-When the subagent reports back, run the two-phase review (see
-skills/executing-plans):
+Low/medium-risk batches get one combined compliance + quality review backed by
+targeted tests/checks. High-risk work keeps stronger independent scrutiny.
+Prefer a focused follow-up to the same runner for one repair round; do not spawn
+a fresh fixer for every finding.
 
-1. **Compliance** — did it do exactly what was asked? Spec criteria met?
-2. **Quality** — conventions, smells, dead code, debug output, fragile tests?
+## Integrating without pollution
 
-If it fails either phase, dispatch a focused fix — describe the specific defect,
-don't re-send the whole task from scratch.
-
-## Integrating without polluting
-
-This is the part that's easy to get wrong. When you accept a subagent's work:
-
-- Pull back the **outcome**, not the transcript: what was done, the commit hash,
-  any decision or surprise worth recording.
-- Write that outcome to STATE.md.
-- Do **not** echo the subagent's full output into the orchestrator. A one-to-two
-  line summary is the right size. The code lives in git; the orchestrator only
-  needs to know it's there and that it passed review.
-
-If you find yourself reading large subagent outputs verbatim into the main
-window, stop — that's the exact failure mode the architecture exists to prevent.
-
-## Parallel dispatch
-
-When dispatching an independent wave, brief each subagent the same way, then
-review returns one at a time. Watch for integration seams — two subagents that
-each passed in isolation can still conflict where their work meets. Resolve the
-seam before the next wave.
+Pull back the outcome, not the transcript. The code and evidence live in git and
+command output; STATE.md stores only durable facts. If the orchestrator starts
+copying agent transcripts or repeatedly asking for status, stop and shrink the
+coordination loop.

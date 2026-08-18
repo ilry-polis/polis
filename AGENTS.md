@@ -1,73 +1,62 @@
 # Polis — Agent Instructions (Codex / Cursor)
 
-Polis is active in this project. It enforces a spec-driven workflow with isolated
-subagents and active context management. This file is read by Codex CLI and by
-Cursor as the project instruction source. Follow it.
+Polis is active. It enforces a spec-driven workflow with active context and
+**token-efficient orchestration**. Follow it.
 
-> Runtime note: Polis is authored once in the Claude Code format and converted
-> per runtime by `scripts/install.sh`. The workflow and principles below are
-> identical across runtimes; only the invocation syntax and hook plumbing differ.
+## Workflow
 
-## The workflow
+**discuss → spec → plan → exec → verify**, each gated by user approval.
 
-Drive every build through these phases, each gated by the user's approval:
+- Don't jump to code. Agree design → spec → plan → execute.
+- New/large project: discuss → roadmap → spec/plan/exec/verify per phase.
+- Polis proposes; the user decides phase transitions and irreversible actions.
 
-**discuss → spec → plan → exec → verify**
+## Invocation
 
-- **Don't jump to code.** Agree the design first, then spec, then plan, then
-  execute. Code is the last step.
-- **New project?** After discuss, run roadmap to cut the app into phases
-  (vertical-slice capabilities; granularity coarse/standard/fine), then run
-  spec → plan → exec → verify per phase, one at a time.
-- **Each phase needs approval.** Propose; let the user decide before advancing.
-
-## Invocation per runtime
-
-- **Codex CLI:** commands are invoked with the `$` prefix, e.g. `$polis-discuss`,
-  `$polis-spec`, `$polis-exec`. Skills live under `.agents/skills/` and load by
-  context. Subagents use Codex's `[agents]` configuration; note Codex only spawns
-  subagents when explicitly asked.
-- **Cursor:** commands are invoked as `/polis:<cmd>`. Rules live under
-  `.cursor/rules/`. Hooks (`beforeSubmitPrompt`, `afterFileEdit`, `stop`) drive
-  the context monitor.
+- Codex CLI: `$polis-discuss`, `$polis-spec`, `$polis-plan`, `$polis-exec`, etc.
+- Cursor/Claude Code: `/polis:<cmd>`.
 
 ## Context discipline
 
-- Keep the main session **under 40%** of the usable window.
-- Push heavy work into **subagents** with fresh context; pull back only the
-  outcome, not the transcript.
-- At **WARNING (40%+)** start delegating and prefer short tasks; at **HIGH
-  (65%+)** finish and commit the current task only; at **CRITICAL (80%+)**
-  pause, compact/restart, resume.
-- On Claude Code the percentage is the real context usage (matches `/context`).
-  On runtimes that don't expose it, the monitor stays silent rather than guessing.
-
-> Codex/Cursor hook note: both runtimes run **command hooks** only. Codex parses
-> but skips prompt/agent hook handlers. So the context monitor runs as a command
-> hook and surfaces signals; the in-context nudge comes from this file and the
-> context-mgmt skill, which is the portable way to deliver it.
+- Keep the main session lean; use git/STATE.md/file anchors instead of replaying
+  raw history.
+- Do **not** delegate merely to satisfy a context percentage. Subagents cost
+  additional model/tool work; use them when isolation, noise containment, or
+  genuine parallelism pays for that cost.
+- At WARNING, avoid broad output and finish the current batch. At HIGH/CRITICAL,
+  checkpoint and pause/resume before starting another batch.
+- Pull back agent outcomes, not transcripts.
 
 ## Execution rules
 
-- **TDD is mandatory.** RED → GREEN → REFACTOR. Test first; if production code is
-  written before its test, delete it and restart.
-- **Atomic commits.** One task, one commit, `[polis] T<n>: <what>`.
-- **Two-phase review** after each task: compliance, then quality. Fix before
-  advancing.
-- **When something breaks**, debug systematically — root-cause before any fix, one
-  hypothesis at a time, fix the source. 3+ failed fixes ⇒ stop, question the design.
-- **Never claim done without evidence** — run it, read the output. A subagent's
-  self-report is a claim, not proof.
+- TDD is mandatory: RED → GREEN → REFACTOR.
+- Atomic commits remain per task: `[polis] T<n>: <what>`.
+- Plans use coherent tasks, not 2–5 minute microtasks; default roughly 5–12
+  meaningful tasks per feature phase.
+- Execute up to 3 related tasks in one bounded runner batch when appropriate.
+- Maximum 2 write-capable subagents concurrently by default.
+- Subagents must **never spawn nested subagents**.
+- Never tight-loop `wait`, `wait_agent`, `list_agents`, or status checks. One
+  wait for a wave, useful coordinator work, then at most one later wait.
+- Low/medium-risk batches get one combined compliance + quality review with
+  targeted evidence. High-risk work keeps stronger independent scrutiny.
+- Prefer one focused repair to the same runner; two failed attempts ⇒ stop and
+  surface the gap instead of spawning more agents.
+- Full-suite verification belongs at meaningful integration boundaries and
+  `$polis-verify`, not after every microtask.
+
+## Risk
+
+Auth, authorization, billing/payments, security boundaries, destructive data
+changes, migrations, and privacy-sensitive work default high risk.
 
 ## State
 
-`.claude/polis/STATE.md` (or the runtime-equivalent path) is the source of truth
-for phase and progress; `specs/` and `plans/` hold versioned intent. Between git
-and STATE.md, nothing is lost to a context reset.
+`.claude/polis/STATE.md` (or runtime-equivalent) is the durable source of truth;
+specs/plans hold intent and git holds implementation. Keep STATE concise.
 
 ## Boundaries
 
-Polis proposes; the human decides irreversible actions. No unilateral merges,
-pushes to protected branches, PR open/merge, permission changes, or deletions.
-
-For the full mental model, see the `using-plugin` skill.
+No unilateral merges, protected-branch pushes, permission changes, destructive
+deletions, or other irreversible actions. When execution stops being mechanical,
+return to debugging/specification rather than multiplying agents.

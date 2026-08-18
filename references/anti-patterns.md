@@ -1,76 +1,77 @@
 # Development Anti-Patterns
 
-The recurring wrong turns Polis watches for during spec, execution, and review.
-Each entry names the pattern, why it's harmful, and the move that avoids it.
-This is the general set; a spec's own "What NOT to do" section lists the ones
-specific to its feature.
+Recurring wrong turns Polis watches for during spec, planning, execution, and
+review. The goal is correctness without avoidable orchestration cost.
 
 ## Scope & process
 
-**Jumping to code.** Writing implementation before the design and spec are
-agreed. The fast path that produces the wrong thing. → Run discuss → spec →
-plan first; code is the last step, not the first.
+**Jumping to code.** Implementing before design/spec are agreed. → discuss →
+spec → plan first.
 
-**Gold-plating.** Building more than the spec asked because it "might be useful."
-Unrequested generality is unrequested risk and unrequested context cost.
-→ Implement exactly what the acceptance criteria require; propose extensions
-separately.
+**Gold-plating.** Building more than acceptance criteria require. → Implement the
+contract; propose extensions separately.
 
-**Scope creep mid-task.** Letting a task absorb adjacent work because you're
-"already in there." → One task, one change, one commit. Note the adjacent work
-as a future task.
+**Scope creep mid-task.** Absorbing adjacent work. → Keep the task coherent and
+note unrelated work separately.
 
-**Silent divergence.** Execution drifts from the plan, or the plan from the
-spec, without anyone flagging it. → Divergence is allowed but must be visible;
-surface it to the user.
+**Microtask explosion.** Splitting one behavior into many 2–5 minute plan items
+(test task, type task, handler task, wiring task) that must land together. This
+multiplies handoffs, subagents, waits, reviews, and context rebuilds without
+adding meaningful reversibility. → Plan the smallest set of coherent tasks;
+default roughly 5–12 per feature phase and batch related tasks 1–3 at a time.
+
+**Agent-per-task reflex.** Spawning a fresh agent simply because a task exists. →
+Delegate only when isolation/noise/parallelism is worth another model thread;
+allow trivial low-risk direct work and batch related tasks.
+
+**Write-heavy fan-out.** Parallel agents edit overlapping or tightly coupled
+areas. → Default max 2 write runners and parallelize only independent seams.
+
+**Polling the workers.** Repeating `wait`, `wait_agent`, `list_agents`, or status
+checks while nothing actionable changed. Each coordination turn can reload
+context and compound token usage. → Wait once for a wave, do useful coordinator
+work, then at most one later wait; surface status instead of polling indefinitely.
+
+**Nested delegation.** A Polis task runner spawns its own agents, creating an
+unbounded tree the orchestrator cannot budget. → Runner depth is exactly 1.
+
+**Reviewer explosion.** Independent reviewers after every small low-risk task. →
+Review low/medium risk once per batch; reserve stronger independent review for
+high-risk work and explicit `/polis:review`.
+
+**Suite-looping.** Re-running the entire repository suite after every small edit.
+→ Targeted tests while implementing, narrow integration evidence per batch, full
+suite at meaningful boundaries and `/polis:verify`.
 
 ## Code shape
 
-**Premature abstraction.** Extracting a framework from a single use case. The
-abstraction encodes guesses about uses that don't exist yet. → Wait for the
-third occurrence before abstracting; duplication is cheaper than the wrong
-abstraction.
+**Premature abstraction.** Extracting frameworks before repeated use proves the
+need. → Prefer the simplest concrete implementation.
 
-**God objects / functions.** One unit that knows and does everything. Impossible
-to test, reason about, or change safely. → Single responsibility; split by
+**God objects/functions.** Too many responsibilities in one unit. → Split by
 reason-to-change.
 
-**Deep nesting.** Pyramids of conditionals. → Guard clauses and early returns;
-flatten the happy path.
+**Deep nesting.** Pyramids of conditionals. → Guard clauses and early returns.
 
-**Magic values.** Unexplained literals scattered through code. → Named constants
-with the meaning attached.
+**Magic values.** Unexplained literals. → Named constants with meaning.
 
-**Catch-and-swallow.** Catching errors and doing nothing, hiding failures until
-they surface somewhere worse. → Handle, or propagate with context; never
-silence.
+**Catch-and-swallow.** Hidden failures. → Handle or propagate with context.
 
 ## State & data
 
-**Mutable shared state.** Multiple owners mutating the same thing, ordering bugs
-waiting to happen. → Single owner, or immutable data, or explicit synchronization.
+**Mutable shared state.** Multiple owners mutate the same thing. → Single owner,
+immutability, or explicit synchronization.
 
-**Stringly-typed data.** Using strings where a type or enum belongs, pushing
-errors to runtime. → Model the domain with real types.
+**Stringly-typed data.** Strings where types/enums belong. → Model the domain.
 
-**Trusting input.** Assuming external data is well-formed. → Validate at the
-boundary; treat everything outside as untrusted.
+**Trusting input.** Assuming external data is valid. → Validate at boundaries.
 
-## Leftovers & hygiene
+## Leftovers
 
-**Debug residue.** console.log / print / dbg! shipped to production. → Remove
-before commit; the pre-review checklist catches these.
+No debug residue, buried TODO/FIXME, or commented-out dead code. Git remembers.
 
-**TODO/FIXME in production.** Deferred work that becomes permanent. → Resolve, or
-file it as a real task; don't bury it in a comment.
+## Meta-pattern
 
-**Commented-out code.** Dead code kept "just in case." Git already remembers.
-→ Delete it.
-
-## The meta-pattern
-
-Most anti-patterns share a root: **acting on an assumption instead of checking
-it.** Assuming the design, assuming the abstraction will be needed, assuming the
-input is valid, assuming the plan still fits. When something feels like it needs
-a guess, that's the moment to verify instead — read the code, ask the user, write
-the test.
+Most waste comes from an unchecked assumption: assuming more tasks means safer,
+more agents means faster, or another status check means progress. Verify the
+trade-off. Spend model turns on decisions and evidence, not ceremony.

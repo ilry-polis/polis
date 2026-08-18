@@ -1,71 +1,63 @@
 # Subagent Guidelines
 
-Read this when you are the subagent executing a Polis task. The orchestrator has
-handed you a task in isolation: you have a fresh context window and none of the
-conversation that led here. That's intentional — your job is to execute one task
-cleanly and report back a tight result. These are the rules that make the handoff
-work from your side.
+Read this when you are a Polis runner executing an assigned batch. You have a
+fresh context intentionally. Your job is to complete a small set of related
+tasks cleanly without creating another orchestration tree.
 
-(The orchestrator's side — how to brief and review you — is in
-skills/subagent-dispatch. This is the contract from your seat.)
+## Your assignment
 
-## What you were given, and what it means
+You should receive a batch ID with **1–3 related task IDs**, plan/spec anchors,
+expected files, constraints, and done evidence. Read the named repository files
+when needed; do not ask the parent to paste broad context you can retrieve.
 
-You should have received: the task definition (ID, description, file paths,
-expected code, the test, the done criterion), the relevant spec section, and
-minimal surrounding context. Treat the spec section as authoritative for *what*
-correct means, and the task as authoritative for *what to do now*.
+If essential information is missing or contradictory, report the gap. Do not
+invent your way past it.
 
-If something essential is missing or contradictory — the test doesn't match the
-description, a referenced file doesn't exist, the spec section doesn't cover a
-decision you must make — **do not invent your way past it.** Report the gap back
-to the orchestrator. A confident guess on missing information is the most
-expensive thing you can do here, because it looks like progress.
+## Hard boundaries
 
-## Stay in your lane
+- Execute only the assigned batch.
+- Work through its tasks sequentially.
+- **Never spawn, delegate to, wait on, list, or manage another subagent.** Polis
+  runner depth is 1.
+- Do not widen scope or proactively start the next batch.
+- Match the project's existing conventions; avoid new dependencies unless the
+  approved plan explicitly requires them.
 
-- **Do only this task.** Not the adjacent improvement you noticed, not the
-  refactor that would be nice, not the next task. One task, one change.
-- **Don't widen scope.** If you spot adjacent work worth doing, name it in your
-  report as a candidate future task. Don't do it.
-- **Match the project, not your preferences.** Use the conventions, framework,
-  and style already in the codebase (the briefing or skills/project-detect tells
-  you which). Don't introduce new dependencies or patterns to suit taste.
+## TDD + commits
 
-## Execute test-first
+For each task:
 
-Follow the TDD cycle (references/tdd-anti-patterns.md, skills/tdd):
+1. Write/adjust the failing test and confirm RED for the intended reason.
+2. Make the smallest correct implementation and confirm GREEN.
+3. Refactor only if useful while staying green.
+4. Commit that task atomically: `[polis] T<n>: <what>`.
 
-1. Write the failing test from the task. Run it; confirm it fails for the right
-   reason.
-2. Write the minimal code to pass. Run it; green.
-3. Refactor if needed, staying green.
-4. Make the atomic commit, message referencing the task ID
-   (`[polis] T<n>: <what>`).
+A batch may reuse one fresh context across related tasks, but atomicity remains
+per task.
+
+## Verification economy
+
+Run targeted tests/checks while implementing. Do not repeatedly run the entire
+repository suite after every tiny edit unless the task is high-risk or the plan
+requires it. At the end of the batch, run the narrow integration checks that
+cover the combined change and report the evidence. `/polis:verify` owns the
+final full-suite gate.
 
 ## Report back tight
 
-This is the half subagents get wrong. The orchestrator is keeping its context
-lean and is going to read your report — so make it small and high-signal:
+Return only:
 
-- **Outcome:** done / blocked, and the commit hash.
-- **What changed:** one or two lines. Not a narration of every edit.
-- **Anything the orchestrator must know:** a decision you had to make, a surprise
-  you hit, a candidate future task you spotted.
-- **Do not** dump your full transcript, the entire diff, or a play-by-play. The
-  code is in git; the orchestrator can look if it needs to. Your report is a
-  summary, not a replay.
+- **Outcome:** done / blocked.
+- **Tasks:** task ID → commit hash.
+- **Evidence:** targeted tests/checks and result.
+- **What changed:** one or two concise lines for the batch.
+- **Must-know:** only a decision, surprise, blocker, or new risk the orchestrator
+  needs.
+
+Do not dump transcripts, full diffs, long command output, or play-by-play.
 
 ## If you get stuck
 
-Two honest fix attempts on a failing task, then stop and report — don't grind.
-Describe precisely what's failing and what you tried. A clear "blocked, here's
-why" is more useful to the orchestrator than a messy half-fix that passes review
-on a technicality.
-
-## The principle
-
-You are trusted to do one thing well and to be honest about the edges. Execute
-precisely, stay narrow, report briefly, and surface gaps instead of papering over
-them. The whole architecture depends on each subagent being a clean, truthful
-unit of work.
+Make at most two focused attempts on the same failure. Then stop and report the
+root symptom plus what was tried. Burning turns on repeated guesses is worse than
+a precise blocker.

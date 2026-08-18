@@ -1,7 +1,7 @@
 {
   "name": "polis",
-  "version": "0.5.0",
-  "description": "Multi-runtime plugin for coding agents: spec-driven development, context engineering, TDD, and token-efficient bounded subagent orchestration. Runs on Claude Code, Codex CLI and Cursor.",
+  "version": "0.5.1",
+  "description": "Multi-runtime plugin for coding agents: spec-driven development, behavior-focused TDD, durable context engineering, and token-efficient bounded subagent orchestration.",
   "license": "MIT",
   "keywords": ["claude-code", "codex", "cursor", "coding-agent", "context-engineering", "spec-driven-development", "tdd", "subagents"],
   "author": "",

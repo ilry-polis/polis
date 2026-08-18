@@ -1,59 +1,36 @@
-# Context Budget — Rules & Rationale
+# Context & Token Efficiency
 
-Polis protects context quality **and** token efficiency. A fresh subagent window
-can reduce context pollution, but every subagent also performs its own model and
-tool work. The correct goal is not "delegate everything"; it is "keep each
-thread focused while minimizing unnecessary model turns."
+Polis does not need to own runtime telemetry. Its responsibility is to keep workflow context focused and durable while avoiding unnecessary model turns.
 
-## What Polis measures
+## Source of truth by runtime
 
-When a runtime exposes real context usage, Polis reads it. When it does not,
-Polis stays silent rather than fabricating precision.
+### Codex
 
-## Thresholds
+Codex exposes native context information in its TUI/status surfaces, including:
 
-- **OK 0–40%** — healthy.
-- **WARNING 40–64%** — reduce broad reads/output; finish the current batch.
-- **HIGH 65–79%** — finish/checkpoint current work only.
-- **CRITICAL 80%+** — save state and pause/resume with fresh context.
+- percentage of context remaining;
+- percentage of context used;
+- total context-window size;
+- session token counters;
+- primary/secondary usage limits when available.
 
-These thresholds are context-health signals, **not automatic delegation
-triggers**.
+Configure the native footer once with `/statusline`, or use `/status` for a detailed snapshot. **Polis installs no Codex context-monitor hook, maintains no `polis-ctx-*` bridge, and defines no WARNING/HIGH/CRITICAL thresholds on Codex.**
 
-## Token-efficient budgeting strategy
+### Claude Code / Cursor
 
-1. **Shrink before spawning.** Prefer file anchors, targeted reads/searches,
-   concise command output, git commits, and STATE.md over loading raw history.
-2. **Batch related implementation.** One fresh runner may execute 1–3 related
-   tasks sequentially, preserving one TDD cycle and atomic commit per task.
-3. **Delegate for a reason.** Use a subagent for isolation, noisy exploration,
-   high-risk separation, or real parallel speedup — not because a task exists.
-4. **Cap write parallelism.** Default maximum: 2 concurrent runners. Read-heavy
-   exploration may parallelize when useful, but avoid write-heavy fan-out.
-5. **No nested agents.** Polis runner depth is 1.
-6. **No polling loops.** One wait for a wave; if needed, useful coordinator work
-   followed by at most one later wait. Status checks are not progress.
-7. **Reuse local context, not global history.** A runner gets plan/spec anchors
-   and reads named files itself. It returns a concise outcome, not transcript.
-8. **Verify at the right boundary.** Targeted checks per task/batch; full suite at
-   meaningful integration boundaries and `/polis:verify`.
-9. **Commits are context checkpoints.** Once work is committed, details can leave
-   the active window; STATE.md stores only durable facts.
+Use native runtime context data where available. Runtime-specific Polis UI/hooks may still exist where useful, but Polis must never fabricate an exact context percentage when the runtime does not expose one.
 
-## Default project orchestration config
+## Token-efficient strategy
 
-```json
-{
-  "orchestration": {
-    "maxTasksPerBatch": 3,
-    "maxConcurrentAgents": 2,
-    "maxWaitCyclesPerWave": 2,
-    "reviewMode": "risk-based",
-    "allowDirectLowRisk": true
-  }
-}
-```
+1. **Targeted input first.** Prefer file/symbol anchors, focused searches, bounded reads, concise command output, git, and STATE.md.
+2. **Coarse plans.** Aim for roughly 3–7 coherent capability tasks per feature phase, not file-by-file microtasks.
+3. **Delegate for a reason.** Use a subagent for isolation, noisy exploration, high-risk separation, or real parallel speedup — not because a task exists or a context percentage changed.
+4. **Bound orchestration.** Default max 2 write-capable runners; no nested agents; no polling loops.
+5. **Reuse useful local context.** At most two closely related coarse tasks may share one runner when that clearly reduces repeated setup.
+6. **Verify at meaningful boundaries.** Behavior-focused evidence during execution; holistic verification at integration boundaries and `/polis:verify`.
+7. **Durable state beats transcript replay.** Git stores implementation; STATE.md stores phase, progress, decisions, blockers, and commit hashes.
+8. **When native context gets low, checkpoint rather than fan out.** Finish a safe coherent boundary or record exact incomplete state, then compact/start fresh and resume.
 
-These defaults intentionally trade a little theoretical parallelism for a much
-smaller orchestration surface. Users can choose `reviewMode: strict` when they
-want stronger per-task ceremony and accept the extra model/tool work.
+## Principle
+
+**The runtime owns telemetry. Polis owns workflow discipline.** Duplicating native context meters with post-tool hooks creates overhead without improving the engineering result.
